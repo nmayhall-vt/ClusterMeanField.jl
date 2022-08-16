@@ -19,6 +19,7 @@ include("type_Atom.jl")
 include("type_Molecule.jl")
 include("type_Cluster.jl")
 include("PyscfFunctions.jl")
-include("CMFs.jl")
+include("incore_cmf.jl")
+include("direct_cmf.jl")
 
 end

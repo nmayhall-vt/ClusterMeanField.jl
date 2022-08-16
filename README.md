@@ -15,7 +15,6 @@
 2. Create python virtual environment which will hold the PYSCF executable.   where `-tauto` let's Julia pick the max number of threads. Use `-t N` to select `N` manually. Removing defaults to 1 thread. 
 
 	```bash
-	cd src/python
 	virtualenv -p python3 venv
 	source venv/bin/activate
 	pip install -r requirements.txt

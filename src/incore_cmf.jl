@@ -94,37 +94,6 @@ end
 
 
 """
-	form_casci_ints(ints::InCoreInts, ci::Cluster, rdm1a, rdm1b)
-
-Obtain a subset of integrals which act on the orbitals in Cluster,
-embedding the 1rdm from the rest of the system
-
-Returns an `InCoreInts` type
-"""
-function form_casci_ints(ints::InCoreInts, ci::Cluster, rdm1a, rdm1b)
-    da = deepcopy(rdm1a)
-    db = deepcopy(rdm1b)
-    da[:,ci.orb_list] .= 0
-    db[:,ci.orb_list] .= 0
-    da[ci.orb_list,:] .= 0
-    db[ci.orb_list,:] .= 0
-    viirs = ints.h2[ci.orb_list, ci.orb_list,:,:]
-    viqri = ints.h2[ci.orb_list, :, :, ci.orb_list]
-    ints_i = subset(ints, ci.orb_list)
-    @tensor begin
-        f[p,q] := viirs[p,q,r,s] * (da+db)[r,s]
-        # fb = deepcopy(fa)
-        # fa[p,s] -= viqri[p,q,r,s] * da[q,r]
-        # fb[p,s] -= viqri[p,q,r,s] * db[q,r]
-        f[p,s] -= .5*viqri[p,q,r,s] * da[q,r]
-        f[p,s] -= .5*viqri[p,q,r,s] * db[q,r]
-    end
-    ints_i.h1 .+= f
-    return ints_i
-end
-
-
-"""
 	compute_cmf_energy(ints, rdm1s, rdm2s, clusters)
 
 Compute the energy of a cluster-wise product state (CMF),

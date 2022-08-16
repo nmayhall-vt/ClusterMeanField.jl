@@ -20,19 +20,12 @@
 	source venv/bin/activate
 	pip install -r requirements.txt
 	julia --project=./ -tauto 
-  ```
+  	```
 
-
-1. Download
-
-	```bash
-	git clone https://github.com/nmayhall-vt/ClusterMeanField.git
-	cd ClusterMeanField.jl/
-	```
 
 3. Build PyCall from Julia REPL
 
-  ```julia
+  	```julia
 	using Pkg; Pkg.build("PyCall")
 	```
 

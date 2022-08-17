@@ -17,6 +17,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
 
 [compat]
+NPZ = "0.4"
 julia = "1.7"
 
 [extras]

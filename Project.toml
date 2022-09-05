@@ -6,6 +6,7 @@ version = "0.1.0"
 [deps]
 ActiveSpaceSolvers = "f8e94ea7-44cc-4f7e-92b7-2a8da6f47aca"
 Arpack = "7d9fca2a-8960-54d3-9f78-7d1dccf2cb97"
+BlockDavidson = "b4c031f8-e7c9-4879-896c-063a10ff8103"
 InCoreIntegrals = "d8079e1f-d74b-4a3d-abb0-c0b53e3a8379"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
@@ -15,9 +16,10 @@ PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
+Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
 
 [compat]
-julia = "1.7"
+julia = "≥ 1.7"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

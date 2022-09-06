@@ -19,6 +19,7 @@ TensorOperations = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
 Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
 
 [compat]
+Term = "1"
 julia = "≥ 1.7"
 
 [extras]

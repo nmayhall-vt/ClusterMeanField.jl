@@ -180,7 +180,7 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
     for ci in clusters
         flush(stdout)
 
-        ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
+        ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1], fspace[ci.idx][2])
         verbose < 2 || display(ansatz)
         ints_i = subset(ints, ci.orb_list, rdm1a, rdm1b)
         #ints_i = form_casci_ints(ints, ci, rdm1a, rdm1b)
@@ -246,7 +246,31 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
         else
             #
             # run PYSCF FCI
-            e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+            e, d1a, d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+#                solver = SolverSettings(verbose=1)
+#                solution = solve(ints_i, ansatz, solver)
+#                d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
+#
+#                norb = n_orb(ints_i)
+#                d2 = (d2aa .+ d2bb .+ 2*d2ab)
+#                #
+#                # run PYSCF FCI
+#                e, d1a, d1b, _d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+#
+#                tmp1 = tr(reshape(d2aa, (norb*norb, norb*norb)))
+#                tmp2 = tr(reshape(_d2, (norb*norb, norb*norb)))
+#                #display((tmp1,tmp2))
+#
+#                @tensor begin
+#                    d1_tmp1[p,q] := d2[p,q,r,r]
+#                end
+#                @tensor begin
+#                    d1_tmp2[p,q] := _d2[p,q,r,r]
+#                end
+#
+#                #d1_tmp2 .= d1_tmp2 ./ (tr(d1a+d1b)-1)
+#                #display(norm(d1a+d1b - d1_tmp2))
+#                display(norm(d1a+d1b - d1_tmp1))
         end
 
         rdm1_dict[ci.idx] = [d1a,d1b]
@@ -270,7 +294,7 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
         rdm1a_out[ci.orb_list, ci.orb_list] .= rdm1_dict[ci.idx][1]
         rdm1b_out[ci.orb_list, ci.orb_list] .= rdm1_dict[ci.idx][2]
     end
-    return e_curr,rdm1a_out, rdm1b_out, rdm1_dict, rdm2_dict
+    return e_curr, rdm1a_out, rdm1b_out, rdm1_dict, rdm2_dict
 end
 
 
@@ -593,4 +617,120 @@ function pack_gradient(K,norb)
         end
     end
     return kout
+end
+
+"""
+    orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
+                                    ci_dconv    = 1e-9,
+                                    sequential  = false,
+                                    verbose     = 1)
+
+Objective function to minimize in OO-CMF
+"""
+function orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
+                                    ci_dconv    = 1e-9,
+                                    sequential  = false,
+                                    verbose     = 1)
+
+        #davg = .5*(da + db)
+        norb = n_orb(ints)
+        Kappa = unpack_gradient(kappa, norb)
+        U = exp(Kappa)
+        ints2 = orbital_rotation(ints,U)
+        da1 = U'*da*U
+        db1 = U'*db*U
+        #davg = U'*davg*U
+        #e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, davg, davg, dconv=ci_dconv, verbose=0,sequential=sequential)
+        e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=ci_dconv, verbose=0,sequential=sequential)
+        da2 = U*da1*U'
+        db2 = U*db1*U'
+        return e
+end
+
+"""
+    orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db; 
+                                    gconv = 1e-8, 
+                                    verbose = 1,
+                                    stepsize = 1e-6)
+
+Compute orbital gradient with finite difference
+"""
+function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db; 
+                                    gconv = 1e-8, 
+                                    verbose = 1,
+                                    stepsize = 1e-6)
+    grad = zeros(size(kappa))
+    for (ii,i) in enumerate(kappa)
+        k1 = deepcopy(kappa)
+        k1[ii] += stepsize
+        e1 = orbital_objective_function(ints, clusters, k1, fspace, da, db, ci_dconv=gconv/10) 
+        k2 = deepcopy(kappa)
+        k2[ii] -= stepsize
+        e2 = orbital_objective_function(ints, clusters, k2, fspace, da, db, ci_dconv=gconv/10) 
+        grad[ii] = (e1-e2)/(2*stepsize)
+    end
+    g_curr = norm(grad)
+    return grad
+end
+
+
+"""
+    orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db; 
+                                    gconv = 1e-8, 
+                                    verbose = 1)
+
+Compute orbital gradient analytically
+"""
+function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db; 
+                                    gconv = 1e-8, 
+                                    verbose = 1)
+    norb = size(ints.h1)[1]
+    # println(" In g_analytic")
+    K = unpack_gradient(kappa, norb)
+    U = exp(K)
+    #println(size(U), size(kappa))
+    ints2 = orbital_rotation(ints,U)
+    da1 = U'*da*U
+    db1 = U'*db*U
+
+    e, gd1a, gd1b, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=gconv/10.0, verbose=verbose)
+    grad = zeros(size(ints2.h1))
+    for ci in clusters
+        grad_1 = grad[:,ci.orb_list]
+        h_1	   = ints2.h1[:,ci.orb_list]
+        v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
+        @tensor begin
+            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,v,u,w]
+            #grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,u,w,v]
+            #grad_1[p,q] += h_1[p,r] * rdm1_dict[ci.idx][r,q]
+            grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx][1][r,q]+rdm1_dict[ci.idx][2][r,q])
+        end
+        for cj in clusters
+            if ci.idx == cj.idx
+                continue
+            end
+            v_212 = ints2.h2[:,cj.orb_list, ci.orb_list, cj.orb_list]
+            v_122 = ints2.h2[:,ci.orb_list, cj.orb_list, cj.orb_list]
+            d1 = rdm1_dict[ci.idx][1] + rdm1_dict[ci.idx][2]
+            d2 = rdm1_dict[cj.idx][1] + rdm1_dict[cj.idx][2]
+
+            d1a = rdm1_dict[ci.idx][1]
+            d1b = rdm1_dict[ci.idx][2]
+            d2a = rdm1_dict[cj.idx][1]
+            d2b = rdm1_dict[cj.idx][2]
+
+            @tensor begin
+                #grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
+                #grad_1[p,q] -= .5*v_212[p,v,u,w] * d1[q,u] * d2[w,v]
+                grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
+                grad_1[p,q] -= v_212[p,v,u,w] * d1a[q,u] * d2a[w,v]
+                grad_1[p,q] -= v_212[p,v,u,w] * d1b[q,u] * d2b[w,v]
+            end
+        end
+        grad[:,ci.orb_list] .= -2*grad_1
+    end
+    grad = grad'-grad
+    gout = pack_gradient(grad, norb)
+    g_curr = norm(gout)
+    return gout
 end

@@ -6,6 +6,7 @@ using Test
 using NPZ
 using InCoreIntegrals
 using ActiveSpaceSolvers
+using Random
 
 function run_o()
 # 
@@ -98,7 +99,7 @@ function run_h6()
     flush(stdout)
 
     clusters    = [(1:3),(4:6)]
-    init_fspace = [(2,1),(2,1)]
+    init_fspace = [(2,2),(2,2)]
     clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
@@ -111,46 +112,51 @@ function run_h6()
 
     f1 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
                         verbose=1, sequential=false)
-    
+  
+    Random.seed!(2)
     norb = n_orb(ints)
-    kappa = ClusterMeanField.pack_gradient(zeros(norb,norb), norb)
+    kappa = rand(norb,norb).*.01
+    kappa = kappa - kappa'
+    kappa = ClusterMeanField.pack_gradient(kappa, norb)
 
     
-    g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, kappa, init_fspace, rdm1, rdm1)
+    g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, kappa, init_fspace, rdm1, rdm1, ci_conv=1e-10)
     display(ClusterMeanField.unpack_gradient(g_anl, norb))
-    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, kappa, init_fspace, rdm1, rdm1, stepsize=1e-7, gconv = 1e-9)
+    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, kappa, init_fspace, rdm1, rdm1, stepsize=1e-7, ci_conv = 1e-10)
     display(ClusterMeanField.unpack_gradient(g_num, norb))
    
     println()
     display(ClusterMeanField.unpack_gradient(g_anl - g_num, norb))
    
     display(norm(g_anl - g_num))
-    
-    # Now do closed shell clusters
-    clusters    = [(1,2),(3,4),(5:6)]
-    init_fspace = [(1,1),(1,1),(1,1)]
-    clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
-    display(clusters)
+    #e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
+    #                          verbose=0, gconv=1e-7, method="cg",sequential=false, max_iter_oo=200)
+   
+    return
+    if true 
+        # Now do closed shell clusters
+        clusters    = [(1,2),(3,4),(5:6)]
+        init_fspace = [(1,1),(1,1),(0,0)]
+        clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
+        display(clusters)
+    end
     
     g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, kappa, init_fspace, rdm1, rdm1, verbose=0)
     g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, kappa, init_fspace, rdm1, rdm1, stepsize=1e-7, gconv = 1e-9, verbose=0)
    
     display(norm(g_anl - g_num))
-    return 
-
-    print("\n Now do high-spin case\n")
-    init_fspace = [(1,2),(1,2)]
-    f2 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
-                        verbose=1, sequential=false)
     
-    @test isapprox(f2[1], f1[1], atol=1e-6)
     e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
-                              verbose=0, gconv=1e-7, method="gd",sequential=false)
+                              verbose=0, gconv=1e-7, method="gd",sequential=false, max_iter_oo=200)
+    Ccmf = Cl*U
+    ints = orbital_rotation(ints,U)
+    
+    e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
+                              verbose=0, gconv=1e-7, method="bfgs",sequential=false, max_iter_oo=200)
 
-
-
-    #Ccmf = Cl*U
-    #ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
+    ints = orbital_rotation(ints,U)
+    Ccmf = Ccmf*U
+    ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
   
 end
 

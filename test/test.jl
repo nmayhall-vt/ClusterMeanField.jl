@@ -120,28 +120,39 @@ function run_h6()
     Random.seed!(2)
     norb = n_orb(ints)
     kappa = rand(norb,norb).*.0
-    #kappa[1,2] = 2*pi 
+    kappa[1,2] = 1. 
     kappa = kappa - kappa'
     U = exp(kappa)
     kappa = ClusterMeanField.pack_gradient(kappa, norb)
     
-    
+   
     etmp = ClusterMeanField.orbital_objective_function(ints, clusters, kappa, init_fspace, rdm1, rdm1, ci_conv=1e-10)
     print("nick E ")
     display(etmp)
+    println()
+    println(" Analytical")
     g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, kappa, init_fspace, rdm1, rdm1, ci_conv=1e-10)
     display(ClusterMeanField.unpack_gradient(g_anl, norb))
-    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, kappa, init_fspace, rdm1, rdm1, stepsize=1e-5, ci_conv = 1e-10)
+    println()
+    println(" Numerical")
+    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, kappa, init_fspace, rdm1, rdm1, stepsize=1e-5, ci_conv = 1e-12)
     display(ClusterMeanField.unpack_gradient(g_num, norb))
+    
 
     println()
-    g_anl = ClusterMeanField.unpack_gradient(g_anl, norb)
-    g_num = ClusterMeanField.unpack_gradient(g_num, norb)
   
     display(U)
+    
+    println()
     display(norm(g_anl - g_num))
-    display(sort(imag(eigvals(g_num))))
+    
+    println()
+    g_anl = ClusterMeanField.unpack_gradient(g_anl, norb)
     display(sort(imag(eigvals(g_anl))))
+    
+    g_num = ClusterMeanField.unpack_gradient(g_num, norb)
+    display(sort(imag(eigvals(g_num))))
+    
     #e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
     #                          verbose=0, gconv=1e-7, method="cg",sequential=false, max_iter_oo=200)
    

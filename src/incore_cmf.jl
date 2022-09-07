@@ -210,7 +210,7 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
                 d1b = d1 
                 d2 *= 2.0
                 e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+                verbose <= 1 || @printf(" Slater Det Energy: %12.8f\n", e)
 
             elseif (na == no) && (nb == 0)
                 #
@@ -222,7 +222,7 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
                 d1a  = d1
                 d1b  = zeros(no,no)
                 e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+                verbose <= 1 || @printf(" Slater Det Energy: %12.8f\n", e)
 
             elseif (na == 0) && (nb == no)
                 #
@@ -234,7 +234,7 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
                 d1a  = zeros(no,no)
                 d1b  = d1
                 e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+                verbose <= 1 || @printf(" Slater Det Energy: %12.8f\n", e)
 
             elseif (na == 0) && (nb==0)
                 # 
@@ -246,7 +246,7 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
         else
             #
             # run PYSCF FCI
-            e, d1a, d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+            e, d1a, d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose-1)
 #                solver = SolverSettings(verbose=1)
 #                solution = solve(ints_i, ansatz, solver)
 #                d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
@@ -316,7 +316,7 @@ Optimize the 1RDM for CMF-CI
 - `verbose`: Printing level 
 """
 function cmf_ci(ints, clusters, fspace, in_rdm1a, in_rdm1b; 
-                max_iter=10, dconv=1e-6, econv=1e-10, verbose=1,sequential=false)
+                max_iter=100, dconv=1e-6, econv=1e-10, verbose=1,sequential=false)
     rdm1a = deepcopy(in_rdm1a)
     rdm1b = deepcopy(in_rdm1b)
     energies = []
@@ -346,8 +346,9 @@ function cmf_ci(ints, clusters, fspace, in_rdm1a, in_rdm1b;
         rdm1a = rdm1a_curr
         rdm1b = rdm1b_curr
         if (abs(d_err) < dconv) && (abs(e_err) < econv)
-            if verbose>1
-                @printf("*CMF-CI: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
+            if verbose>0
+                @printf("*CMF-CI: Elec %12.8f Total %12.8f | Change: RDM: %6.1e Energy %6.1e\n", 
+                        e_curr-ints.h0, e_curr, d_err, e_err)
             end
             break
         end
@@ -594,8 +595,6 @@ end
 
 
 function unpack_gradient(kappa,norb)
-    # n = round(.5+sqrt(1+4k)/2)
-    # println(n)
     length(kappa) == norb*(norb-1)÷2 || throw(DimensionMismatch)
     K = zeros(norb,norb)
     ind = 1
@@ -637,7 +636,12 @@ function orbital_objective_function(ints, clusters, kappa, fspace, da, db;
     #davg = .5*(da + db)
     norb = n_orb(ints)
     K = unpack_gradient(kappa, norb)
+    #U = Matrix(1.0I,norb,norb)
     U = exp(K)
+    #display("nick U")
+    #display(U)
+    #display("nick K")
+    #display(K)
     ints2 = orbital_rotation(ints,U)
     da1 = U'*da*U
     db1 = U'*db*U
@@ -666,6 +670,8 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db;
     grad = zeros(size(kappa))
     for (ii,i) in enumerate(kappa)
         
+        #ii == 2 || continue
+    
         k1 = deepcopy(kappa)
         k1[ii] += stepsize
         e1 = orbital_objective_function(ints, clusters, k1, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
@@ -675,8 +681,8 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db;
         e2 = orbital_objective_function(ints, clusters, k2, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
         
         grad[ii] = (e1-e2)/(2*stepsize)
+        #println(e1)
     end
-    g_curr = norm(grad)
     return grad
 end
 
@@ -698,7 +704,7 @@ f_{pq} = h_{pr}P_{rq} + 2 <rs||tp> G_{pstq}
 """
 function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db; 
                                     ci_conv = 1e-8, 
-                                    verbose = 1)
+                                    verbose = 0)
     norb = size(ints.h1)[1]
     # println(" In g_analytic")
     K = unpack_gradient(kappa, norb)
@@ -748,6 +754,7 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
         grad[:,ci.orb_list] .= grad_1
     end
     grad .= 2 .* (grad .- grad')
+    #grad = U*grad*U'
     gout = pack_gradient(grad, norb)
     return gout
 end

@@ -596,6 +596,7 @@ end
 function unpack_gradient(kappa,norb)
     # n = round(.5+sqrt(1+4k)/2)
     # println(n)
+    length(kappa) == norb*(norb-1)÷2 || throw(DimensionMismatch)
     K = zeros(norb,norb)
     ind = 1
     for i in 1:norb
@@ -608,6 +609,7 @@ function unpack_gradient(kappa,norb)
     return K
 end
 function pack_gradient(K,norb)
+    length(K) == norb*norb || throw(DimensionMismatch)
     kout = zeros(norb*(norb-1)÷2)
     ind = 1
     for i in 1:norb
@@ -621,30 +623,31 @@ end
 
 """
     orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
-                                    ci_dconv    = 1e-9,
+                                    ci_conv     = 1e-9,
                                     sequential  = false,
                                     verbose     = 1)
 
 Objective function to minimize in OO-CMF
 """
 function orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
-                                    ci_dconv    = 1e-9,
+                                    ci_conv     = 1e-9,
                                     sequential  = false,
                                     verbose     = 0)
 
     #davg = .5*(da + db)
     norb = n_orb(ints)
-    Kappa = unpack_gradient(kappa, norb)
-    U = exp(Kappa)
+    K = unpack_gradient(kappa, norb)
+    U = exp(K)
     ints2 = orbital_rotation(ints,U)
     da1 = U'*da*U
     db1 = U'*db*U
     #davg = U'*davg*U
     #e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, davg, davg, dconv=ci_dconv, verbose=0,sequential=sequential)
     e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, 
-        dconv=ci_dconv, 
+        dconv=ci_conv, 
         verbose=verbose,
         sequential=sequential)
+    #display(e)
     return e
 end
 
@@ -662,12 +665,15 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db;
                                     stepsize = 1e-6)
     grad = zeros(size(kappa))
     for (ii,i) in enumerate(kappa)
+        
         k1 = deepcopy(kappa)
         k1[ii] += stepsize
-        e1 = orbital_objective_function(ints, clusters, k1, fspace, da, db, ci_dconv=ci_conv, verbose=verbose) 
+        e1 = orbital_objective_function(ints, clusters, k1, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
+        
         k2 = deepcopy(kappa)
         k2[ii] -= stepsize
-        e2 = orbital_objective_function(ints, clusters, k2, fspace, da, db, ci_dconv=ci_conv, verbose=verbose) 
+        e2 = orbital_objective_function(ints, clusters, k2, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
+        
         grad[ii] = (e1-e2)/(2*stepsize)
     end
     g_curr = norm(grad)
@@ -681,6 +687,14 @@ end
                                     verbose = 1)
 
 Compute orbital gradient analytically
+
+
+```math
+w_{pq} = 2(f_{pq} - f_{qp})
+```
+```math
+f_{pq} = h_{pr}P_{rq} + 2 <rs||tp> G_{pstq} 
+```
 """
 function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db; 
                                     ci_conv = 1e-8, 
@@ -689,12 +703,15 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
     # println(" In g_analytic")
     K = unpack_gradient(kappa, norb)
     U = exp(K)
-    #println(size(U), size(kappa))
+    #display("nick U")
+    #display(U)
     ints2 = orbital_rotation(ints,U)
     da1 = U'*da*U
     db1 = U'*db*U
 
     e, gd1a, gd1b, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=ci_conv, verbose=verbose)
+    #println("anl")
+    #display(e)
     grad = zeros(size(ints2.h1))
     for ci in clusters
         grad_1 = grad[:,ci.orb_list]
@@ -702,7 +719,7 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
         v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
         @tensor begin
             grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,v,u,w]
-            #grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,u,w,v]
+            #grad_1[p,q] +=.5* v_111[p,v,u,w] * rdm2_dict[ci.idx][q,u,w,v]
             #grad_1[p,q] += h_1[p,r] * rdm1_dict[ci.idx][r,q]
             grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx][1][r,q]+rdm1_dict[ci.idx][2][r,q])
         end
@@ -728,10 +745,9 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
                 grad_1[p,q] -= v_212[p,v,u,w] * d1b[q,u] * d2b[w,v]
             end
         end
-        grad[:,ci.orb_list] .= -2*grad_1
+        grad[:,ci.orb_list] .= grad_1
     end
-    grad = grad'-grad
+    grad .= 2 .* (grad .- grad')
     gout = pack_gradient(grad, norb)
-    g_curr = norm(gout)
     return gout
 end

@@ -10,7 +10,13 @@ using ActiveSpaceSolvers
 function run()
 # 
     atoms = []
-    push!(atoms,Atom(1,"O",[0,0,0]))
+    #push!(atoms,Atom(1,"O",[0,0,0]))
+    push!(atoms,Atom(1,"H",[0,0,0]))
+    push!(atoms,Atom(2,"H",[1,0,0]))
+    push!(atoms,Atom(3,"H",[2,0,0]))
+    push!(atoms,Atom(4,"H",[3,0,0]))
+    push!(atoms,Atom(5,"H",[4,0,0]))
+    push!(atoms,Atom(6,"H",[5,0,0]))
     #basis = "6-31g"
     basis = "sto-3g"
 
@@ -34,7 +40,7 @@ function run()
     println(" done.")
     flush(stdout)
 
-    clusters    = [(1,),(2,5),(3,4)]
+    clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
 
     clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
@@ -44,19 +50,14 @@ function run()
     rdm1a = rdm_mf
     rdm1b = rdm_mf
     
-    sol = solve(ints, FCIAnsatz(5,3,3), SolverSettings())
+    sol = solve(ints, FCIAnsatz(6,3,3), SolverSettings())
     display(sol)
 
-    f1 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
+    e, d1a, d1b, d1_dict, d2_dict = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
                         verbose=1, sequential=false)
     
-    
-    print("\n Now do high-spin case\n")
-    init_fspace = [(1,1),(2,0),(1,1)]
-    f2 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
-                        verbose=1, sequential=false)
-    
-    @test isapprox(f2[1], f1[1], atol=1e-6)
+    ClusterMeanField.assemble_full_2rdm(clusters, d2_dict)
+   
     #e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
     #                          verbose=0, gconv=1e-7, method="cg",sequential=true)
     

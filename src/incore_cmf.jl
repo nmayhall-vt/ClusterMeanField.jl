@@ -594,3 +594,9 @@ function pack_gradient(K,norb)
     end
     return kout
 end
+
+
+function assemble_full_2rdm(clusters::Vector{Cluster}, rdm2s::Dict{Integer, Array})
+    norb = sum([length(i) for i in clusters])
+    @printf(" Norbs: %i\n",norb)
+end

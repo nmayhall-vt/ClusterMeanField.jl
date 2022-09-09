@@ -13,10 +13,10 @@ function run()
     #push!(atoms,Atom(1,"O",[0,0,0]))
     push!(atoms,Atom(1,"H",[0,0,0]))
     push!(atoms,Atom(2,"H",[1,0,0]))
-    push!(atoms,Atom(3,"H",[2,0,0]))
-    push!(atoms,Atom(4,"H",[3,0,0]))
-    push!(atoms,Atom(5,"H",[4,0,0]))
-    push!(atoms,Atom(6,"H",[5,0,0]))
+    push!(atoms,Atom(3,"H",[2,1,0]))
+    push!(atoms,Atom(4,"H",[3,1,0]))
+    push!(atoms,Atom(5,"H",[4,2,0]))
+    push!(atoms,Atom(6,"H",[5,2,0]))
     #basis = "6-31g"
     basis = "sto-3g"
 
@@ -56,8 +56,14 @@ function run()
     e, d1a, d1b, d1_dict, d2_dict = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
                         verbose=1, sequential=false)
     
-    ClusterMeanField.assemble_full_2rdm(clusters, d2_dict)
-   
+
+    rdm1, rdm2 = ClusterMeanField.assemble_full_rdm(clusters, d1_dict, d2_dict)
+
+    e2 = compute_energy(ints, rdm1, rdm2) 
+    e3 = ClusterMeanField.compute_cmf_energy(ints, d1_dict, d2_dict, clusters) 
+  
+    @printf(" E1 = %12.8f E2 = %12.8f E3 = %12.8f\n", e, e2, e3)
+
     #e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
     #                          verbose=0, gconv=1e-7, method="cg",sequential=true)
     

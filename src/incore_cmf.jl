@@ -247,6 +247,13 @@ function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rd
             #
             # run PYSCF FCI
             e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+            
+            #solver = SolverSettings(verbose=1)
+            #solution = solve(ints_i, ansatz, solver)
+            #d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
+
+            #norb = n_orb(ints_i)
+            #d2 = (d2aa .+ d2bb .+ 2*d2ab)
         end
 
         rdm1_dict[ci.idx] = [d1a,d1b]
@@ -596,7 +603,63 @@ function pack_gradient(K,norb)
 end
 
 
-function assemble_full_2rdm(clusters::Vector{Cluster}, rdm2s::Dict{Integer, Array})
+"""
+    assemble_full_rdm(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+
+Return spin summed 1 and 2 RDMs
+"""
+function assemble_full_rdm(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
     norb = sum([length(i) for i in clusters])
     @printf(" Norbs: %i\n",norb)
+    rdm1 = zeros(norb,norb)
+    for ci in clusters
+        rdm1[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][1] .+ rdm1s[ci.idx][2]
+    end
+    
+    rdm2 = zeros(norb,norb,norb,norb)
+    @tensor begin
+        rdm2[p,q,r,s] += rdm1[p,q] * rdm1[r,s]
+        rdm2[p,q,r,s] -= .5*rdm1[p,s] * rdm1[r,q]
+    end
+
+    for ci in clusters
+        rdm2[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx]
+    end
+    return rdm1, rdm2
+end
+
+"""
+    assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+
+Return 1 and 2 RDMs
+"""
+function assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+    norb = sum([length(i) for i in clusters])
+    @printf(" Norbs: %i\n",norb)
+    rdm1a = zeros(norb,norb)
+    rdm1b = zeros(norb,norb)
+    for ci in clusters
+        rdm1a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][1] 
+        rdm1b[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][2] 
+    end
+    
+    rdm2aa = zeros(norb,norb,norb,norb)
+    rdm2bb = zeros(norb,norb,norb,norb)
+    rdm2ab = zeros(norb,norb,norb,norb)
+    @tensor begin
+        rdm2aa[p,q,r,s] += rdm1a[p,q] * rdm1a[r,s]
+        rdm2aa[p,q,r,s] -= rdm1a[p,s] * rdm1a[r,q]
+
+        rdm2bb[p,q,r,s] += rdm1b[p,q] * rdm1b[r,s]
+        rdm2bb[p,q,r,s] -= rdm1b[p,s] * rdm1b[r,q]
+
+        rdm2ab[p,q,r,s] += rdm1a[p,q] * rdm1b[r,s]
+    end
+
+    for ci in clusters
+        rdm2aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][1]
+        rdm2bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][2]
+        rdm2ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][3]
+    end
+    return (rdm1a, rdm1b), (rdm2aa, rdm2bb, rdm2ab)
 end

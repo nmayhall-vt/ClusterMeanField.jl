@@ -419,7 +419,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{Cluster}, fspace, dguess_a, d
     db2 = deepcopy(dguess_b)
 
     iter = 0
-    kappa = zeros(norb*(norb-1))
+    kappa = zeros(norb*(norb-1)÷2)
 
     #
     #   Define Objective function (energy)
@@ -576,9 +576,11 @@ function do_diis(f,g,callback,kappa, gconv,max_iter, method)
 end
 
 
+"""
+    unpack_gradient(kappa,norb)
+"""
 function unpack_gradient(kappa,norb)
-    # n = round(.5+sqrt(1+4k)/2)
-    # println(n)
+    length(kappa) == norb*(norb-1)÷2 || throw(DimensionMismatch)
     K = zeros(norb,norb)
     ind = 1
     for i in 1:norb
@@ -590,8 +592,12 @@ function unpack_gradient(kappa,norb)
     end
     return K
 end
+"""
+    pack_gradient(K,norb)
+"""
 function pack_gradient(K,norb)
-    kout = zeros(norb*(norb-1))
+    length(K) == norb*norb || throw(DimensionMismatch)
+    kout = zeros(norb*(norb-1)÷2)
     ind = 1
     for i in 1:norb
         for j in i+1:norb
@@ -601,6 +607,7 @@ function pack_gradient(K,norb)
     end
     return kout
 end
+
 
 
 """
@@ -663,3 +670,74 @@ function assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Arra
     end
     return (rdm1a, rdm1b), (rdm2aa, rdm2bb, rdm2ab)
 end
+
+
+"""
+    orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
+                                    gconv = 1e-8,
+                                    verbose = 1)
+Compute orbital gradient analytically
+```math
+w_{pq} = 2(f_{pq} - f_{qp})
+```
+```math
+f_{pq} = h_{pr}P_{rq} + 2 <rs||tp> G_{pstq}
+```
+"""
+function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
+                                    ci_conv = 1e-8,
+                                    verbose = 0)
+    norb = size(ints.h1)[1]
+    # println(" In g_analytic")
+    K = unpack_gradient(kappa, norb)
+    U = exp(K)
+    #display("nick U")
+    #display(U)
+    ints2 = orbital_rotation(ints,U)
+    da1 = U'*da*U
+    db1 = U'*db*U
+
+    e, gd1a, gd1b, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=ci_conv, verbose=verbose)
+    #println("anl")
+    #display(e)
+    grad = zeros(size(ints2.h1))
+    for ci in clusters
+        grad_1 = grad[:,ci.orb_list]
+        h_1	   = ints2.h1[:,ci.orb_list]
+        v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
+        @tensor begin
+            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,v,u,w]
+            #grad_1[p,q] +=.5* v_111[p,v,u,w] * rdm2_dict[ci.idx][q,u,w,v]
+            #grad_1[p,q] += h_1[p,r] * rdm1_dict[ci.idx][r,q]
+            grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx][1][r,q]+rdm1_dict[ci.idx][2][r,q])
+        end
+        for cj in clusters
+            if ci.idx == cj.idx
+                continue
+            end
+            v_212 = ints2.h2[:,cj.orb_list, ci.orb_list, cj.orb_list]
+            v_122 = ints2.h2[:,ci.orb_list, cj.orb_list, cj.orb_list]
+            d1 = rdm1_dict[ci.idx][1] + rdm1_dict[ci.idx][2]
+            d2 = rdm1_dict[cj.idx][1] + rdm1_dict[cj.idx][2]
+
+            d1a = rdm1_dict[ci.idx][1]
+            d1b = rdm1_dict[ci.idx][2]
+            d2a = rdm1_dict[cj.idx][1]
+            d2b = rdm1_dict[cj.idx][2]
+
+            @tensor begin
+                #grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
+                #grad_1[p,q] -= .5*v_212[p,v,u,w] * d1[q,u] * d2[w,v]
+                grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
+                grad_1[p,q] -= v_212[p,v,u,w] * d1a[q,u] * d2a[w,v]
+                grad_1[p,q] -= v_212[p,v,u,w] * d1b[q,u] * d2b[w,v]
+            end
+        end
+        grad[:,ci.orb_list] .= grad_1
+    end
+    grad .= 2 .* (grad .- grad')
+    #grad = U*grad*U'
+    gout = pack_gradient(grad, norb)
+    return gout
+end
+

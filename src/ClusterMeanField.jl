@@ -33,5 +33,6 @@ include("type_Cluster.jl")
 include("PyscfFunctions.jl")
 include("incore_cmf.jl")
 include("direct_cmf.jl")
+include("newton.jl")
 
 end

@@ -61,7 +61,11 @@ function run()
 
     e2 = compute_energy(ints, rdm1, rdm2) 
     e3 = ClusterMeanField.compute_cmf_energy(ints, d1_dict, d2_dict, clusters) 
-  
+ 
+    grad = ClusterMeanField.build_orbital_gradient(ints, rdm1, rdm2)
+    hess = ClusterMeanField.build_orbital_hessian(ints, rdm1, rdm2)
+
+    display(grad)
     @printf(" E1 = %12.8f E2 = %12.8f E3 = %12.8f\n", e, e2, e3)
 
     #e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 

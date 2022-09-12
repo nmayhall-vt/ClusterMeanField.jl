@@ -64,6 +64,13 @@ function run()
   
     @printf(" E1 = %12.8f E2 = %12.8f E3 = %12.8f\n", e, e2, e3)
 
+    norb = n_orb(ints)
+    g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, zeros(norb*(norb-1)÷2), init_fspace, d1a, d1b)
+    display(g_anl)
+
+    ClusterMeanField.build_orbital_gradient(ints, rdm1, rdm2)
+    ClusterMeanField.build_orbital_hessian(ints, rdm1, rdm2)
+
     #e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
     #                          verbose=0, gconv=1e-7, method="cg",sequential=true)
     

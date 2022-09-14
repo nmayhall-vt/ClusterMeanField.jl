@@ -687,7 +687,8 @@ f_{pq} = h_{pr}P_{rq} + 2 <rs||tp> G_{pstq}
 function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
                                     ci_conv = 1e-8,
                                     verbose = 0)
-    norb = size(ints.h1)[1]
+#={{{=#
+    norb = n_orb(ints)
     # println(" In g_analytic")
     K = unpack_gradient(kappa, norb)
     U = exp(K)
@@ -740,4 +741,68 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
     gout = pack_gradient(grad, norb)
     return gout
 end
+#=}}}=#
 
+"""
+    orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
+                                    ci_conv     = 1e-9,
+                                    sequential  = false,
+                                    verbose     = 1)
+Objective function to minimize in OO-CMF
+"""
+function orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
+                                    ci_conv     = 1e-9,
+                                    sequential  = false,
+                                    verbose     = 0)
+
+    #davg = .5*(da + db)
+    norb = n_orb(ints)
+    K = unpack_gradient(kappa, norb)
+    #U = Matrix(1.0I,norb,norb)
+    U = exp(K)
+    #display("nick U")
+    #display(U)
+    #display("nick K")
+    #display(K)
+    ints2 = orbital_rotation(ints,U)
+    da1 = U'*da*U
+    db1 = U'*db*U
+    #davg = U'*davg*U
+    #e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, davg, davg, dconv=ci_dconv, verbose=0,sequential=sequential)
+    e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, 
+        dconv=ci_conv, 
+        verbose=verbose,
+        sequential=sequential)
+    #display(e)
+    return e
+end
+
+"""
+    orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db; 
+                                    gconv = 1e-8, 
+                                    verbose = 1,
+                                    stepsize = 1e-6)
+Compute orbital gradient with finite difference
+"""
+function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db; 
+                                    ci_conv = 1e-10, 
+                                    verbose = 0,
+                                    stepsize = 1e-6)
+    grad = zeros(size(kappa))
+    for (ii,i) in enumerate(kappa)
+        
+        #ii == 2 || continue
+    
+        k1 = deepcopy(kappa)
+        k1[ii] += stepsize
+        e1 = orbital_objective_function(ints, clusters, k1, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
+        
+        k2 = deepcopy(kappa)
+        k2[ii] -= stepsize
+        e2 = orbital_objective_function(ints, clusters, k2, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
+        
+        grad[ii] = (e1-e2)/(2*stepsize)
+        #println(e1)
+    end
+    return grad
+end

@@ -27,11 +27,13 @@ export get_nuclear_rep
 export localize
 export get_ovlp
 
+
 include("type_Atom.jl")
 include("type_Molecule.jl")
 include("type_Cluster.jl")
 include("PyscfFunctions.jl")
 include("incore_cmf.jl")
 include("direct_cmf.jl")
+include("mbe.jl")
 
 end

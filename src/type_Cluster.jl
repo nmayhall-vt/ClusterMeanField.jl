@@ -20,6 +20,7 @@ Return number of orbitals in `Cluster`
 function Base.length(c::Cluster)
     return length(c.orb_list)
 end
+
 """
 	dim_tot(c::Cluster)
 

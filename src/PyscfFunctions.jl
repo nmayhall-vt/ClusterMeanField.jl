@@ -324,6 +324,8 @@ function pyscf_fci(ham, na, nb;
 
     if do_rdm2
         d1,d2 = cisolver.make_rdm12(ci, norb, (na,nb))
+        #(d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(ci, norb, (na,nb))
+        # d2 = d2aa + 2*d2ab + d2bb
     end
 
     #@printf(" Energy2: %12.8f\n", compute_energy(ham.h0, ham.h1, ham.h2, d1a+d1b, d2))

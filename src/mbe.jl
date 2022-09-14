@@ -1,4 +1,116 @@
 using ClusterMeanField
+using PyCall
+
+struct Increment{T}
+    #term::NTuple{N,Int}
+    term::Vector{Int}
+    E::Array{T,1}
+    Pa::Array{T,2}
+    Pb::Array{T,2}
+    Gaa::Array{T,4}
+    Gab::Array{T,4}
+    Gbb::Array{T,4}
+end
+function Increment(n::Int ;T=Float64)
+    return Increment{T}(Vector{Int}([]), [0.0], zeros(n,n), zeros(n,n), zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
+end
+function Increment(da::Array{T,2}, db::Array{T,2})  where {T}
+    n = size(da,1)
+    n == size(da,2) || throw(DimensionMismatch)
+    n == size(db,1) || throw(DimensionMismatch)
+    n == size(db,2) || throw(DimensionMismatch)
+    incr = Increment{T}([], [0.0], da, db, zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
+    Gaa = incr.Gaa
+    Gab = incr.Gab
+    Gbb = incr.Gbb
+    @tensor begin
+        Gaa[p,q,r,s] += da[p,q] * da[r,s]
+        Gaa[p,q,r,s] -= da[p,s] * da[r,q]
+
+        Gbb[p,q,r,s] += db[p,q] * db[r,s]
+        Gbb[p,q,r,s] -= db[p,s] * db[r,q]
+
+        Gab[p,q,r,s] += da[p,q] * db[r,s]
+    end
+    incr.Gaa .= Gaa
+    incr.Gab .= Gab
+    incr.Gbb .= Gbb
+    return incr
+end
+function Base.display(incr::Increment)
+    @printf(" :Increment:   %s\n",incr.term)
+    @printf("   E:          %12.8f\n",incr.E[1])
+    @printf("   tr(Pa):     %12.8f\n",tr(incr.Pa))
+    @printf("   tr(Pb):     %12.8f\n",tr(incr.Pb))
+    @printf("   tr(Gaa):    %12.8f\n",tr(incr.Gaa))
+    @printf("   tr(Gab):    %12.8f\n",tr(incr.Gab))
+    @printf("   tr(Gbb):    %12.8f\n",tr(incr.Gbb))
+end
+
+function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)
+    e = ints.h0
+    e += sum(ints.h1 .* incr.Pa)
+    e += sum(ints.h1 .* incr.Pb)
+    e += .5*sum(ints.h2 .* incr.Gaa)
+    e += .5*sum(ints.h2 .* incr.Gbb)
+    e += sum(ints.h2 .* incr.Gab)
+    return e
+end
+
+
+"""
+"""
+function compute_energy2(h0, h1, h2, rdms::Dict{String, Array{T}}) where T
+    length(rdms["Pa"]) == length(h1) || throw(DimensionMismatch)
+    length(rdms["Pb"]) == length(h1) || throw(DimensionMismatch)
+    length(rdms["Gaa"]) == length(h2) || throw(DimensionMismatch)
+    length(rdms["Gbb"]) == length(h2) || throw(DimensionMismatch)
+    length(rdms["Gab"]) == length(h2) || throw(DimensionMismatch)
+
+    e = h0
+    e += sum(h1 .* rdms["Pa"])
+    e += sum(h1 .* rdms["Pb"])
+    e += .5*sum(h2 .* rdms["Gaa"])
+    e += .5*sum(h2 .* rdms["Gbb"])
+    e += sum(h2 .* rdms["Gab"])
+    return e
+end
+"""
+"""
+function compute_energy2(ints::InCoreInts, rdms::Dict{String, Array{T}}) where T
+    return compute_energy2(ints.h0, ints.h1, ints.h2, rdms)
+end
+"""
+    compute_energy(ints::InCoreInts, rdm1, rdm2)
+
+Return energy defined by `rdm1` and `rdm2` which are not spin-traced 
+1 and 2 RDMs
+"""
+function compute_energy2(ints::InCoreInts, rdm1::Dict{String, Array{T,2}}, rdm2::Dict{String, Array{T,4}}) where T
+    return compute_energy2(ints.h0, ints.h1, ints.h2, rdm1, rdm2) 
+end
+
+"""
+    compute_energy(ints::InCoreInts, rdm1, rdm2)
+
+Return energy defined by `rdm1` and `rdm2` which are not spin-traced 
+1 and 2 RDMs
+"""
+function compute_energy2(h0, h1, h2, rdm1::Dict{String, Array{T,2}}, rdm2::Dict{String, Array{T,4}}) where T
+    length(rdm1["a"]) == length(h1) || throw(DimensionMismatch)
+    length(rdm1["b"]) == length(h1) || throw(DimensionMismatch)
+    length(rdm2["aa"]) == length(h2) || throw(DimensionMismatch)
+    length(rdm2["bb"]) == length(h2) || throw(DimensionMismatch)
+    length(rdm2["ab"]) == length(h2) || throw(DimensionMismatch)
+
+    e = h0
+    e += sum(h1 .* rdm1["a"])
+    e += sum(h1 .* rdm1["b"])
+    e += .5*sum(h2 .* rdm2["aa"])
+    e += .5*sum(h2 .* rdm2["bb"])
+    e += sum(h2 .* rdm2["ab"])
+    return e
+end
 
 function LinearAlgebra.tr(A::Array{T,4}) where T
 #={{{=#
@@ -14,99 +126,117 @@ function LinearAlgebra.tr(A::Array{T,4}) where T
 end
 #=}}}=#
 
+"""
+    spin_trace(rdm1::Dict{String,Array{T,2}}, rdm2::Dict{String,Array{T,4}})
 
-function compute_increment(ints, ci, fspace, rdm1a, rdm1b; verbose=2)
+Integrate out spin from our RDMs
+
+P = Pa + Pb
+G = Gaa + Gbb + 2Gab
+"""
+function spin_trace(rdm1::Dict{String,Array{T,2}}, rdm2::Dict{String,Array{T,4}}) where T
+    return rdm1["a"] .+ rdm1["b"], rdm2["aa"] .+ 2 .* rdm2["ab"] .+ rdm2["bb"]
+end
+
+function compute_increment(ints::InCoreInts{T}, ci, fspace, rdm1a, rdm1b; 
+                           verbose=2, max_cycle=100, conv_tol=1e-8) where T
     #={{{=#
     @printf( "Compute increment for cluster: %s\n", string(ci))
     na = fspace[1]
     nb = fspace[2]
     no = length(ci)
-    
+
     no_tot = n_orb(ints) 
-    
+
     e = 0.0
-    d1a = zeros(no, no)     
-    d1b = zeros(no, no)     
-    d1 = zeros(no, no)     
-    d2 = zeros(no, no, no, no)   
 
     ansatz = FCIAnsatz(length(ci), na, nb)
     verbose < 0 || display(ansatz)
     ints_i = subset(ints, ci.orb_list, rdm1a, rdm1b)
-    
+
     if ansatz.dim == 1
+        #
+        # we have a slater determinant. Compute energy and rdms
+
+        if (na == no) && (nb == no)
             #
-            # we have a slater determinant. Compute energy and rdms
-
-            if (na == no) && (nb == no)
-                #
-                # a doubly occupied space
-                d1 = Matrix(1.0I, no, no)
-                for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                    d2[p,q,r,s] = 2*d1[p,q]*d1[r,s] - d1[p,s]*d1[r,q]
-                end
-                d1a = d1 
-                d1b = d1 
-                d2 *= 2.0
-                e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
-
-            elseif (na == no) && (nb == 0)
-                #
-                # singly occupied space
-                d1 = Matrix(1.0I, no, no)
-                for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                    d2[p,q,r,s] = d1[p,q]*d1[r,s] - d1[p,s]*d1[r,q]
-                end
-                d1a  = d1
-                d1b  = zeros(no,no)
-                e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
-
-            elseif (na == 0) && (nb == no)
-                #
-                # singly occupied space
-                d1 = Matrix(1.0I, no, no)
-                for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                    d2[p,q,r,s] = d1[p,q]*d1[r,s] - d1[p,s]*d1[r,q]
-                end
-                d1a  = zeros(no,no)
-                d1b  = d1
-                e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
-
-            elseif (na == 0) && (nb==0)
-                # 
-                # a virtual space (do nothing)
-            else
-                error(" How can this be?")
+            # doubly occupied space
+            da = Matrix(1.0I, no, no)
+            db = Matrix(1.0I, no, no)
+            Gaa = zeros(no, no, no, no) 
+            Gab = zeros(no, no, no, no) 
+            Gbb = zeros(no, no, no, no) 
+            for p in 1:no, q in 1:no, r in 1:no, s in 1:no
+                Gaa[p,q,r,s] = da[p,q]*da[r,s] - da[p,s]*d1["a"][r,q]
+                Gbb[p,q,r,s] = db[p,q]*db[r,s] - db[p,s]*d1["b"][r,q]
+                Gab[p,q,r,s] = da[p,q]*db[r,s]
             end
-            #e, d1, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+            display(ints_i.h0)
+            e = compute_energy(ints_i, da + db, Gaa + 2*Gab + Gbb)
+            verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+
+        elseif (na == no) && (nb == 0)
+
+        elseif (na == 0) && (nb == no)
+
+        elseif (na == 0) && (nb==0)
+            # 
+            # a virtual space (do nothing)
         else
-            #
-            # run PYSCF FCI
-            e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[1],fspace[2], verbose=verbose)
+            error(" How can this be?")
         end
-        d1 .= d1a .+ d1b
-        #display(d2)
+    else
+        #
+        # run PYSCF FCI
+        #e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[1],fspace[2], verbose=verbose)
+        pyscf = pyimport("pyscf")
+        fci = pyimport("pyscf.fci")
+        cisolver = pyscf.fci.direct_spin1.FCI()
+        cisolver.max_cycle = max_cycle
+        cisolver.conv_tol = conv_tol
+        nelec = na + nb
+        e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=0)
+        (d1["a"], d1["b"]), (d2["aa"], d2["ab"], d2["bb"])  = cisolver.make_rdm12s(vfci, no, (na,nb))
+        display(tr(d1["a"]))
+        display(tr(d1["b"]))
+        display(tr(d2["aa"]))
+        display(tr(d2["ab"]))
+        display(tr(d2["bb"]))
+    end
     return e, d1, d2
-#=}}}=#
+    #=}}}=#
 end
 
-function gamma_mbe(ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; correct_trace=false) where T
+"""
+    build_cumulant(rdm2, rdm1)
+
+take in rdms and construct cumulant
+# Arguments:
+- `rdm2`: 2rdm ordered [1,1,2,2] such that E+= 1/2 (p,q|r,s)2rdm[p,q,r,s]
+- `rdm1`: 1rdm 
+"""
+function build_cumulant(rdm2, rdm1)
+
+    c = zeros(size(rdm2))
+    @tensor begin
+        c[p,q,r,s] = rdm2[p,q,r,s] - rdm1[p,q]*rdm1[r,s] + rdm1[p,s]*rdm1[q,r]
+    end
+end
+
+function gamma_mbe(ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1) where T
     N = sum([length(ci) for ci in clusters])
     Nelec = sum([sum(i) for i in fspace])
     Npair = Nelec*(Nelec-1)÷2
 
-    E1 = 0.0
-    P1 = zeros(N,N)
-    G1 = zeros(N,N,N,N)
-   
+    ref_data = Increment(rdm1a, rdm1b)
+    E0 = compute_energy(ints, ref_data)
+    ref_data.E .= E0
+
+    display(ref_data)
+
     # Start by just doing everything int the full space (dumb)
-    increments = Dict()
-    increments["E"] = Dict{Tuple,T}()
-    increments["P"] = Dict{Tuple,Array{T,2}}()
-    increments["G"] = Dict{Tuple,Array{T,4}}()
+
+    increments = Vector{Increment{T}}([])
 
     n_clusters = length(clusters)
     for ci in 1:n_clusters
@@ -115,95 +245,88 @@ function gamma_mbe(ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; correct_
         E1i, P1i, G1i = compute_increment(ints, c, f, rdm1a, rdm1b)
         
         E1 = 0.0
-        P1 = zeros(N,N)
-        G1 = zeros(N,N,N,N)
+        P1a = zeros(N,N)
+        P1b = zeros(N,N)
+        G1aa = zeros(N,N,N,N)
+        G1ab = zeros(N,N,N,N)
+        G1bb = zeros(N,N,N,N)
 
-        E1 += E1i
-        P1[c.orb_list, c.orb_list] .+= P1i
-        G1[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= G1i
+        E1 += E1i 
+        P1a[c.orb_list, c.orb_list] .+= P1i["a"] - ref_data.Pa[c.orb_list, c.orb_list]
+        P1b[c.orb_list, c.orb_list] .+= P1i["b"] - ref_data.Pa[c.orb_list, c.orb_list]
+        G1aa[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= G1i["aa"] - ref_data.Gaa[c.orb_list, c.orb_list, c.orb_list, c.orb_list]
+        G1ab[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= G1i["ab"] - ref_data.Gab[c.orb_list, c.orb_list, c.orb_list, c.orb_list]
+        G1bb[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= G1i["bb"] - ref_data.Gbb[c.orb_list, c.orb_list, c.orb_list, c.orb_list]
 
-        increments["E"][(c,)] = E1i
-        increments["P"][(c,)] = P1i
-        increments["G"][(c,)] = G1i
+        push!(increments, Increment([ci], [E1], P1a, P1b, G1aa, G1ab, G1bb))
     end
 
-    if correct_trace
-        @printf(" Trace of G1: %12.8f\n", tr(G1))
-        tmp = tr(G1) 
-        for p in 1:N
-            G1[p,p,p,p] = G1[p,p,p,p]*Npair/tmp
+
+    # 2-body
+    nbody = 1
+    if nbody > 1 
+        for ci_idx in 1:n_clusters
+            for cj_idx in ci_idx+1:n_clusters
+                ci = clusters[ci_idx]
+                cj = clusters[cj_idx]
+                c = Cluster(1, [ci.orb_list..., cj.orb_list...])
+                f = (fspace[ci.idx][1] + fspace[cj.idx][1], fspace[ci.idx][2] + fspace[cj.idx][2])
+                Ei, Pi, Gi = compute_increment(ints, c, f, rdm1a, rdm1b)
+
+                Eincr = 0.0
+                Pincra = zeros(N,N)
+                Pincrb = zeros(N,N)
+                Gincraa = zeros(N,N,N,N)
+                Gincrab = zeros(N,N,N,N)
+                Gincrbb = zeros(N,N,N,N)
+
+                Eincr += Ei 
+                Eincr -= increments["E"][(ci,)] + increments["E"][(cj,)]
+
+                Pincra[c.orb_list, c.orb_list] .+= Pi["a"]
+                Pincra .-=  increments["Pa"][(ci,)] + increments["Pa"][(cj,)]
+
+                Gincraa[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= Gi["aa"]
+                Gincraa .-=  increments["Gaa"][(ci,)] + increments["Gaa"][(cj,)]
+
+                increments["E"][(ci,cj)] = Eincr
+                increments["Pa"][(ci,cj)] = Pincra 
+                increments["Pb"][(ci,cj)] = Pincrb
+                increments["Gaa"][(ci,cj)] = Gincraa
+                increments["Gab"][(ci,cj)] = Gincrab
+                increments["Gbb"][(ci,cj)] = Gincrbb
+
+            end
         end
-        @printf(" correct...\n")
-        @printf(" Trace of G1: %12.8f\n", tr(G1))
     end
 
     @printf(" Add results\n")
     E = 0.0
-    P = zeros(N,N)
-    G = zeros(N,N,N,N)
-    for (term, val) in increments["E"]
-        E += val
-    end
-    for (term, val) in increments["P"]
-        P .+= val
-    end
-    for (term, val) in increments["G"]
-        G .+= val
+    Pa = zeros(N,N)
+    Pb = zeros(N,N)
+    Gaa = zeros(N,N,N,N)
+    Gab = zeros(N,N,N,N)
+    Gbb = zeros(N,N,N,N)
+    final_data = Increment(N) 
+    display(ref_data)
+    for inc in increments
+        display(inc)
+        final_data.E .+= inc.E
+        final_data.Pa .+= inc.Pa
+        final_data.Pb .+= inc.Pb
+        final_data.Gaa .+= inc.Gaa
+        final_data.Gab .+= inc.Gab
+        final_data.Gbb .+= inc.Gbb
     end
     
-    Enew = compute_energy(ints, P, G)
+
+    Enew = compute_energy(ints, final_data)
     @printf(" E_nuc: %12.8f\n", ints.h0)
     @printf(" Summed quantities\n")
-    @printf("   E:     %12.8f\n", E)
-    @printf("   tr(P1): %12.8f\n", tr(P))
-    @printf("   tr(G1): %12.8f\n", tr(G))
-    @printf("   tr(HG): %12.8f\n", Enew)
+    @printf("   E0:      %12.8f\n", E0)
+    @printf("   tr(HG):  %12.8f\n", Enew)
+    display(final_data)
    
-
-    # 2-body
-    E2 = 0.0
-    P2 = zeros(N,N)
-    G2 = zeros(N,N,N,N)
-    n_clusters = length(clusters)
-    for ci_idx in 1:n_clusters
-        for cj_idx in ci_idx+1:n_clusters
-            ci = clusters[ci_idx]
-            cj = clusters[cj_idx]
-            c = Cluster(1, [ci.orb_list..., cj.orb_list...])
-            f = (fspace[ci.idx][1] + fspace[cj.idx][1], fspace[ci.idx][2] + fspace[cj.idx][2])
-            E2i, P2i, G2i = compute_increment(ints, c, f, rdm1a, rdm1b)
-        
-            increments["E"][(ci,cj)] = E2i - increments["E"][(ci,)] - increments["E"][(cj,)]
-            increments["P"][(ci,cj)] = P2i
-            j_shift = length(ci)
-            for (ii,i) in enumerate(ci)
-                for (ii,i) in enumerate(ci)
-                    increments["P"][(ci,cj)] = P2i 
-                end
-            end
-            increments["P"][(ci,cj)][ci.orb_list, ci.orb_list] .-= increments["P"][(ci,)]
-            increments["P"][(ci,cj)][cj.orb_list, cj.orb_list] .-= increments["P"][(cj,)]
-            increments["G"][(ci,cj)] = G2i - increments["G"][(ci,)] - increments["G"][(cj,)]
-
-            E2 += E2i
-            P2[c.orb_list, c.orb_list] .+= P2i
-            G2[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= G2i
-        end
-    end
-
-    E2 -= E1*n_clusters
-    P2 -= P1*n_clusters
-    G2 -= G1*n_clusters
-
-    
-    Enew = compute_energy(ints, P2, G2)
-    @printf(" E_nuc: %12.8f\n", ints.h0)
-    @printf(" 1-body quantities\n")
-    @printf("   E2:     %12.8f\n", E2)
-    @printf("   tr(P2): %12.8f\n", tr(P2))
-    @printf("   tr(G2): %12.8f\n", tr(G2))
-    @printf("   tr(HP): %12.8f\n", Enew)
-    
 end
 
 

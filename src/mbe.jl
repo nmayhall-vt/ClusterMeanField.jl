@@ -101,7 +101,8 @@ function gamma_mbe(ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; correct_
     E1 = 0.0
     P1 = zeros(N,N)
     G1 = zeros(N,N,N,N)
-    
+   
+    # Start by just doing everything int the full space (dumb)
     increments = Dict()
     increments["E"] = Dict{Tuple,T}()
     increments["P"] = Dict{Tuple,Array{T,2}}()
@@ -112,14 +113,18 @@ function gamma_mbe(ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; correct_
         c = clusters[ci]
         f = (fspace[c.idx][1], fspace[c.idx][2])
         E1i, P1i, G1i = compute_increment(ints, c, f, rdm1a, rdm1b)
-
-        increments["E"][(c,)] = E1i
-        increments["P"][(c,)] = P1i
-        increments["G"][(c,)] = G1i
+        
+        E1 = 0.0
+        P1 = zeros(N,N)
+        G1 = zeros(N,N,N,N)
 
         E1 += E1i
         P1[c.orb_list, c.orb_list] .+= P1i
         G1[c.orb_list, c.orb_list, c.orb_list, c.orb_list] .+= G1i
+
+        increments["E"][(c,)] = E1i
+        increments["P"][(c,)] = P1i
+        increments["G"][(c,)] = G1i
     end
 
     if correct_trace
@@ -131,14 +136,28 @@ function gamma_mbe(ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; correct_
         @printf(" correct...\n")
         @printf(" Trace of G1: %12.8f\n", tr(G1))
     end
+
+    @printf(" Add results\n")
+    E = 0.0
+    P = zeros(N,N)
+    G = zeros(N,N,N,N)
+    for (term, val) in increments["E"]
+        E += val
+    end
+    for (term, val) in increments["P"]
+        P .+= val
+    end
+    for (term, val) in increments["G"]
+        G .+= val
+    end
     
-    Enew = compute_energy(ints, P1, G1)
+    Enew = compute_energy(ints, P, G)
     @printf(" E_nuc: %12.8f\n", ints.h0)
-    @printf(" 1-body quantities\n")
-    @printf("   E1:     %12.8f\n", E1)
-    @printf("   tr(P1): %12.8f\n", tr(P1))
-    @printf("   tr(G1): %12.8f\n", tr(G1))
-    @printf("   tr(HP): %12.8f\n", Enew)
+    @printf(" Summed quantities\n")
+    @printf("   E:     %12.8f\n", E)
+    @printf("   tr(P1): %12.8f\n", tr(P))
+    @printf("   tr(G1): %12.8f\n", tr(G))
+    @printf("   tr(HG): %12.8f\n", Enew)
    
 
     # 2-body

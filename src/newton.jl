@@ -22,13 +22,8 @@ function build_orbital_gradient(ints::InCoreInts, rdm1::Array{T,2}, rdm2::Array{
     G = ints.h1*rdm1 
     V = ints.h2
 
-    #println(rdm2[1,2,3,4])
-    #println(rdm2[1,4,3,2]*2)
     @tensor begin
-        G[p,q] +=  V[r,s,p,t] * rdm2[r,s,t,q]
-        #G[p,q] -=  V[r,s,t,p] * rdm2[r,s,t,q]
-        #G[p,q] +=  V[r,q,u,t] * rdm2[p,r,t,u]
-        #G[p,q] -=  V[q,s,u,t] * rdm2[p,s,t,u]
+        G[p,q] +=  V[r,p,s,t] * rdm2[r,q,s,t]
     end
     return pack_gradient(2*(G-G'),N)
 end

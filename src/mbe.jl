@@ -1,6 +1,30 @@
 using ClusterMeanField
 using PyCall
 
+"""
+    integrate_rdm2(d)
+
+Integrate a 2rdm to get the 1rdm. 
+We assume that d is stored, d[1,1,2,2]
+such that <p'q'rs> is D[p,s,q,r]
+Also, we will agree with pyscf, and use the following normalization:
+
+tr(D) = N(N-1)
+"""
+function integrate_rdm2(d)
+    n = size(d,1)
+    d1 = zeros(n,n)
+    for p in 1:n
+        for q in 1:n
+            for r in 1:n
+                d1[p,q] += d[p,q,r,r]
+            end
+        end
+    end
+    c = tr(d1) 
+    N = (1 + sqrt(1+4*c) )/2
+    return d1/(N-1)
+end
 
 """
     screen(nodes, thresh, increments)
@@ -128,9 +152,9 @@ function LinearAlgebra.tr(A::Array{T,4}) where T
     N == size(A,4) || throw(DimensionMismatch)
     out = T(0)
     for i in 1:N
-    for j in 1:N
-        out += A[i,i,j,j]
-    end
+        for j in 1:N
+            out += A[i,i,j,j]
+        end
     end
     return out
 end

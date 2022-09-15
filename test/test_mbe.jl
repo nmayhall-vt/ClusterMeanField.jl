@@ -79,7 +79,9 @@ function run()
     Pb = P*.5
     out, increments = ClusterMeanField.gamma_mbe(3, ints, clusters, init_fspace, Pa, Pb)
     @printf(" EFCI: %12.8f\n", e_fci+ints.h0)
-    return out, increments
+
+
+    return ints, out, increments
 end
 
-out, increments = run();
+ints, out, increments = run();

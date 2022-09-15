@@ -61,6 +61,8 @@ function run()
     #clusters    = [(1,),(2,),(3,),(4,),(5,),(6,),(7:12)]
     #init_fspace = [(1,1),(1,1),(1,1)]
     
+    clusters    = [(1,),(2,),(3,),(4,5),(6,),(7,),(8,)]
+    init_fspace = [(1,1),(1,1),(1,1),(1,1),(0,0),(0,0),(0,0)]
     clusters    = [(1,),(2,),(3,),(4,),(5,6,7,8)]
     init_fspace = [(1,1),(1,1),(1,1),(1,1),(0,0)]
     clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
@@ -75,8 +77,9 @@ function run()
     P = C'*S*P*S*C
     Pa = P*.5
     Pb = P*.5
-    ClusterMeanField.gamma_mbe(5, ints, clusters, init_fspace, Pa, Pb)
+    out, increments = ClusterMeanField.gamma_mbe(5, ints, clusters, init_fspace, Pa, Pb)
     @printf(" EFCI: %12.8f\n", e_fci+ints.h0)
+    return out, increments
 end
 
-run()
+out, increments = run();

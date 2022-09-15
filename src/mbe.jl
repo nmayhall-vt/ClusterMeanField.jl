@@ -2,6 +2,39 @@ using ClusterMeanField
 using PyCall
 
 
+"""
+    screen(nodes, thresh, increments)
+
+Decide if a term should be computed by determining if the 
+2body correlation graph is connected. 
+Here we screen on the eigenvalue of the fiedler vector.
+
+# Note
+In order to use this, we will need to modify MBE to allow for 
+terms to be missing from the increments dictionary.
+"""
+function screen(nodes, thresh, increments)
+    N = length(nodes)
+    L = zeros(N,N)
+    for ii in 1:N
+        for jj in ii+1:N
+            i = nodes[ii]
+            j = nodes[jj]
+            L[ii,jj] = -abs(increments[(i,j)].E[1])
+            L[jj,ii] = L[ii,jj]
+        end
+    end
+    for i in 1:N
+        L[i,i] = -sum(L[:,i])
+    end
+    l,_ = eigen(L)
+    l = sort(l) 
+    if l[2] < thresh
+        return true     # skip
+    else 
+        return false    # compute
+    end
+end
 
 """
     subset(ints::InCoreInts, list, rmd1a, rdm1b)
@@ -116,11 +149,11 @@ function spin_trace(rdm1::Dict{String,Array{T,2}}, rdm2::Dict{String,Array{T,4}}
 end
 
 function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fspace, rdm1a, rdm1b; 
-                           verbose=0, max_cycle=100, conv_tol=1e-8) where T
+                           verbose=0, max_cycle=100, conv_tol=1e-8, screen=1e-12) where T
     #={{{=#
-    @printf( "\n*Compute increment for cluster:     ")
-    [@printf("%3i",c.idx)  for c in cluster_set]
-    println()
+    verbose < 1 || @printf( "\n*Compute increment for cluster:     ")
+    verbose < 1 || [@printf("%3i",c.idx)  for c in cluster_set]
+    verbose < 1 || println()
     na = 0
     nb = 0
     no = 0
@@ -141,7 +174,7 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
     e = 0.0
 
     ansatz = FCIAnsatz(length(ci), na, nb)
-    verbose < 0 || display(ansatz)
+    verbose < 1 || display(ansatz)
     ints_i = subset(ints, ci.orb_list, rdm1a, rdm1b)
     ints_i = subset(ints, ci, rdm1a, rdm1b)
     #ints_i = form_1rdm_dressed_ints(ints, ci.orb_list, rdm1a, rdm1b)
@@ -167,7 +200,7 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
             #e = compute_energy(ints_i, d1a + d1b, d2aa + 2*d2ab + d2bb)
             #verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
             e = compute_energy(ints_i, (d1a, d1b))
-            verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+            verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
 
         elseif (na == no) && (nb == 0)
                 #
@@ -177,7 +210,7 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
                 end
                 e = compute_energy(ints, (d1a, d1b))
                 #e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+                verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
 
         elseif (na == 0) && (nb == no)
                 #
@@ -187,13 +220,13 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
                 end
                 e = compute_energy(ints, (d1a, d1b))
                 #e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+                verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
 
         elseif (na == 0) && (nb==0)
             # 
             # a virtual space (do nothing)
             e = compute_energy(ints_i, (d1a, d1b))
-            verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+            verbose < 2|| @printf(" Slater Det Energy: %12.8f\n", e)
         else
             error(" How can this be?")
         end
@@ -238,7 +271,7 @@ function build_cumulant(rdm2, rdm1)
     end
 end
 
-function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1) where T
+function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1, thresh=1e-12) where T
     N = sum([length(ci) for ci in clusters])
     N == size(rdm1a,1) || throw(DimensionMismatch)
     
@@ -264,13 +297,13 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
     if nbody >= 1
         for i in 1:n_clusters
             ci = clusters[i]
-            out_i = compute_increment(ints, [ci], fspace, rdm1a, rdm1b)
+            out_i = compute_increment(ints, [ci], fspace, rdm1a, rdm1b, verbose=verbose)
 
             # subtract the hartree fock data so that we have an increment from HF
             out_i = out_i - ref_data
             increments[(i,)] = out_i
             
-            display(out_i)
+            verbose < 2 || display(out_i)
         end
     end
 
@@ -279,9 +312,10 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
     if nbody >= 2 
         for i in 1:n_clusters
             for j in i+1:n_clusters
+                
                 ci = clusters[i]
                 cj = clusters[j]
-                out_i = compute_increment(ints, [ci, cj], fspace, rdm1a, rdm1b)
+                out_i = compute_increment(ints, [ci, cj], fspace, rdm1a, rdm1b, verbose=verbose)
 
                 # subtract the hartree fock data so that we have an increment from HF
                 out_i = out_i - ref_data
@@ -290,7 +324,7 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                 out_i = out_i - increments[(j,)]
 
                 increments[(i,j)] = out_i
-                display(out_i) 
+                verbose < 2 || display(out_i) 
             end
         end
     end
@@ -303,7 +337,10 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                     ci = clusters[i]
                     cj = clusters[j]
                     ck = clusters[k]
-                    out_i = compute_increment(ints, [ci, cj, ck], fspace, rdm1a, rdm1b)
+
+                    #screen((i, j, k), thresh, increments) == false || continue
+
+                    out_i = compute_increment(ints, [ci, cj, ck], fspace, rdm1a, rdm1b, verbose=verbose)
 
                     # subtract the hartree fock data so that we have an increment from HF
                     out_i = out_i - ref_data
@@ -317,7 +354,7 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                     out_i = out_i - increments[(k,)]
 
                     increments[(i,j,k)] = out_i
-                    display(out_i) 
+                    verbose < 2 || display(out_i)
                 end
             end
         end
@@ -329,35 +366,36 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
             for j in i+1:n_clusters
                 for k in j+1:n_clusters
                     for l in k+1:n_clusters
+                    
+                        #screen((i, j, k, l), thresh, increments) == false || continue
+                    
                         ci = clusters[i]
                         cj = clusters[j]
                         ck = clusters[k]
                         cl = clusters[l]
-                        out_i = compute_increment(ints, [ci, cj, ck, cl], fspace, rdm1a, rdm1b)
+                        out_i = compute_increment(ints, [ci, cj, ck, cl], fspace, rdm1a, rdm1b, verbose=verbose)
 
                         # subtract the hartree fock data so that we have an increment from HF
-                        out_i = out_i - ref_data 
+                        subtract!(out_i, ref_data) 
                         
                         # subtract the lower orders 
-                        out_i = out_i - increments[(i,j,k)]
-                        out_i = out_i - increments[(i,j,l)]
-                        out_i = out_i - increments[(i,k,l)]
-                        out_i = out_i - increments[(j,k,l)]
-                        
-                        out_i = out_i - increments[(i,j)]
-                        out_i = out_i - increments[(i,k)]
-                        out_i = out_i - increments[(i,l)]
-                        out_i = out_i - increments[(j,k)]
-                        out_i = out_i - increments[(j,l)]
-                        out_i = out_i - increments[(k,l)]
-                        
-                        out_i = out_i - increments[(i,)]
-                        out_i = out_i - increments[(j,)]
-                        out_i = out_i - increments[(k,)]
-                        out_i = out_i - increments[(l,)]
+                        subtract!(out_i, increments[(i,j,k)])
+                        subtract!(out_i, increments[(i,j,l)])
+                        subtract!(out_i, increments[(i,k,l)])
+                        subtract!(out_i, increments[(j,k,l)])
+                        subtract!(out_i, increments[(i,j)])
+                        subtract!(out_i, increments[(i,k)])
+                        subtract!(out_i, increments[(i,l)])
+                        subtract!(out_i, increments[(j,k)])
+                        subtract!(out_i, increments[(j,l)])
+                        subtract!(out_i, increments[(k,l)])
+                        subtract!(out_i, increments[(i,)])
+                        subtract!(out_i, increments[(j,)])
+                        subtract!(out_i, increments[(k,)])
+                        subtract!(out_i, increments[(l,)])
                         
                         increments[(i,j,k,l)] = out_i
-                        display(out_i) 
+                        verbose < 2 || display(out_i) 
                     end
                 end
             end
@@ -371,54 +409,57 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                 for k in j+1:n_clusters
                     for l in k+1:n_clusters
                         for m in l+1:n_clusters
+                        
+                            #screen((i, j, k, l), thresh, increments) == false || continue
+                        
                             ci = clusters[i]
                             cj = clusters[j]
                             ck = clusters[k]
                             cl = clusters[l]
                             cm = clusters[m]
-                            out_i = compute_increment(ints, [ci, cj, ck, cl, cm], fspace, rdm1a, rdm1b)
+                            out_i = compute_increment(ints, [ci, cj, ck, cl, cm], fspace, rdm1a, rdm1b, verbose=verbose)
 
                             # subtract the hartree fock data so that we have an increment from HF
-                            out_i = out_i - ref_data 
+                            subtract!(out_i, ref_data)
 
                             # subtract the lower orders 
-                            out_i = out_i - increments[(i,j,k,l)]
-                            out_i = out_i - increments[(i,j,k,m)]
-                            out_i = out_i - increments[(i,j,l,m)]
-                            out_i = out_i - increments[(i,k,l,m)]
-                            out_i = out_i - increments[(j,k,l,m)]
+                            subtract!(out_i, increments[(i,j,k,l)])
+                            subtract!(out_i, increments[(i,j,k,m)])
+                            subtract!(out_i, increments[(i,j,l,m)])
+                            subtract!(out_i, increments[(i,k,l,m)])
+                            subtract!(out_i, increments[(j,k,l,m)])
 
-                            out_i = out_i - increments[(i,j,k)]
-                            out_i = out_i - increments[(i,j,l)]
-                            out_i = out_i - increments[(i,j,m)]
-                            out_i = out_i - increments[(i,k,l)]
-                            out_i = out_i - increments[(i,k,m)]
-                            out_i = out_i - increments[(i,l,m)]
-                            out_i = out_i - increments[(j,k,l)]
-                            out_i = out_i - increments[(j,k,m)]
-                            out_i = out_i - increments[(j,l,m)]
-                            out_i = out_i - increments[(k,l,m)]
+                            subtract!(out_i, increments[(i,j,k)])
+                            subtract!(out_i, increments[(i,j,l)])
+                            subtract!(out_i, increments[(i,j,m)])
+                            subtract!(out_i, increments[(i,k,l)])
+                            subtract!(out_i, increments[(i,k,m)])
+                            subtract!(out_i, increments[(i,l,m)])
+                            subtract!(out_i, increments[(j,k,l)])
+                            subtract!(out_i, increments[(j,k,m)])
+                            subtract!(out_i, increments[(j,l,m)])
+                            subtract!(out_i, increments[(k,l,m)])
 
-                            out_i = out_i - increments[(i,j)]
-                            out_i = out_i - increments[(i,k)]
-                            out_i = out_i - increments[(i,l)]
-                            out_i = out_i - increments[(i,m)]
-                            out_i = out_i - increments[(j,k)]
-                            out_i = out_i - increments[(j,l)]
-                            out_i = out_i - increments[(j,m)]
-                            out_i = out_i - increments[(k,l)]
-                            out_i = out_i - increments[(k,m)]
-                            out_i = out_i - increments[(l,m)]
-                            out_i = out_i - increments[(i,j)]
+                            subtract!(out_i, increments[(i,j)])
+                            subtract!(out_i, increments[(i,k)])
+                            subtract!(out_i, increments[(i,l)])
+                            subtract!(out_i, increments[(i,m)])
+                            subtract!(out_i, increments[(j,k)])
+                            subtract!(out_i, increments[(j,l)])
+                            subtract!(out_i, increments[(j,m)])
+                            subtract!(out_i, increments[(k,l)])
+                            subtract!(out_i, increments[(k,m)])
+                            subtract!(out_i, increments[(l,m)])
+                            subtract!(out_i, increments[(i,j)])
                             
-                            out_i = out_i - increments[(i,)]
-                            out_i = out_i - increments[(j,)]
-                            out_i = out_i - increments[(k,)]
-                            out_i = out_i - increments[(l,)]
-                            out_i = out_i - increments[(m,)]
+                            subtract!(out_i, increments[(i,)])
+                            subtract!(out_i, increments[(j,)])
+                            subtract!(out_i, increments[(k,)])
+                            subtract!(out_i, increments[(l,)])
+                            subtract!(out_i, increments[(m,)])
 
                             increments[(i,j,k,l,m)] = out_i
-                            display(out_i) 
+                            verbose < 2 || display(out_i) 
                         end
                     end
                 end
@@ -426,11 +467,12 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
         end
     end
 
+    @printf(" Number of increments: %i\n", length(increments))
     @printf(" Add results\n")
     final_data = deepcopy(ref_data) 
     for (key,inc) in increments
         #display(inc)
-        final_data = final_data + inc
+        add!(final_data, inc)
     end
     
 
@@ -449,43 +491,9 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
         out_i = compute_increment(ints, [ci, cj], [(4,4),(0,0)], rdm1a, rdm1b)
 
         display(out_i) 
-    end 
+    end
+    return final_data, increments
 end
 
 
-
-#"""
-#    assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
-#Return 1 and 2 RDMs
-#"""
-#function assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
-#    norb = sum([length(i) for i in clusters])
-#    @printf(" Norbs: %i\n",norb)
-#    rdm1a = zeros(norb,norb)
-#    rdm1b = zeros(norb,norb)
-#    for ci in clusters
-#        rdm1a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][1]
-#        rdm1b[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][2]
-#    end
-#
-#    rdm2aa = zeros(norb,norb,norb,norb)
-#    rdm2bb = zeros(norb,norb,norb,norb)
-#    rdm2ab = zeros(norb,norb,norb,norb)
-#    @tensor begin
-#        rdm2aa[p,q,r,s] += rdm1a[p,q] * rdm1a[r,s]
-#        rdm2aa[p,q,r,s] -= rdm1a[p,s] * rdm1a[r,q]
-#
-#        rdm2bb[p,q,r,s] += rdm1b[p,q] * rdm1b[r,s]
-#        rdm2bb[p,q,r,s] -= rdm1b[p,s] * rdm1b[r,q]
-#
-#        rdm2ab[p,q,r,s] += rdm1a[p,q] * rdm1b[r,s]
-#    end
-#
-#    for ci in clusters
-#        rdm2aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][1]
-#        rdm2bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][2]
-#        rdm2ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][3]
-#    end
-#    return (rdm1a, rdm1b), (rdm2aa, rdm2bb, rdm2ab)
-#end
 

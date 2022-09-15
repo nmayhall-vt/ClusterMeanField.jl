@@ -78,8 +78,11 @@ function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)
 end
 
 """
+    add!(i1::Increment, i2::Increment)
+
+Add `i2` to `i1`, modifying `i1`.
 """
-function Base.:-(i1::Increment, i2::Increment)
+function add!(i1::Increment, i2::Increment)
     orbs1 = union((c.orb_list for c in i1.clusters)...)
     orbs2 = union((c.orb_list for c in i2.clusters)...)
     
@@ -88,39 +91,50 @@ function Base.:-(i1::Increment, i2::Increment)
    
     length(ind1) == length(ind2) || error("huh?")
 
-    #display(ind1)
-    #display(ind2)
-    out = deepcopy(i1)
-    out.E .= i1.E .- i2.E
-    out.Pa[ind1, ind1] .-= i2.Pa[ind2, ind2]
-    out.Pb[ind1, ind1] .-= i2.Pb[ind2, ind2]
-    out.Gaa[ind1, ind1, ind1, ind1] .-= i2.Gaa[ind2, ind2, ind2, ind2]
-    out.Gab[ind1, ind1, ind1, ind1] .-= i2.Gab[ind2, ind2, ind2, ind2]
-    out.Gbb[ind1, ind1, ind1, ind1] .-= i2.Gbb[ind2, ind2, ind2, ind2]
+    i1.E .+= i2.E
+    i1.Pa[ind1, ind1] .+= i2.Pa[ind2, ind2]
+    i1.Pb[ind1, ind1] .+= i2.Pb[ind2, ind2]
+    i1.Gaa[ind1, ind1, ind1, ind1] .+= i2.Gaa[ind2, ind2, ind2, ind2]
+    i1.Gab[ind1, ind1, ind1, ind1] .+= i2.Gab[ind2, ind2, ind2, ind2]
+    i1.Gbb[ind1, ind1, ind1, ind1] .+= i2.Gbb[ind2, ind2, ind2, ind2]
+    return
+end
 
+"""
+    subtract!(i1::Increment, i2::Increment)
+
+Subtract `i2` from `i1`, modifying `i1`.
+"""
+function subtract!(i1::Increment, i2::Increment)
+    orbs1 = union((c.orb_list for c in i1.clusters)...)
+    orbs2 = union((c.orb_list for c in i2.clusters)...)
+    
+    ind1 = findall(x->x in orbs2, orbs1) # coinciding indices in i1
+    ind2 = findall(x->x in orbs1, orbs2) # coinciding indices in i2
+   
+    length(ind1) == length(ind2) || error("huh?")
+
+    i1.E .-= i2.E
+    i1.Pa[ind1, ind1] .-= i2.Pa[ind2, ind2]
+    i1.Pb[ind1, ind1] .-= i2.Pb[ind2, ind2]
+    i1.Gaa[ind1, ind1, ind1, ind1] .-= i2.Gaa[ind2, ind2, ind2, ind2]
+    i1.Gab[ind1, ind1, ind1, ind1] .-= i2.Gab[ind2, ind2, ind2, ind2]
+    i1.Gbb[ind1, ind1, ind1, ind1] .-= i2.Gbb[ind2, ind2, ind2, ind2]
+
+    return
+end
+"""
+"""
+function Base.:-(i1::Increment, i2::Increment)
+    out = deepcopy(i1)
+    subtract!(out,i2)
     return out 
 end
 
 """
 """
 function Base.:+(i1::Increment, i2::Increment)
-    orbs1 = union((c.orb_list for c in i1.clusters)...)
-    orbs2 = union((c.orb_list for c in i2.clusters)...)
-    
-    ind1 = findall(x->x in orbs2, orbs1) # coinciding indices in i1
-    ind2 = findall(x->x in orbs1, orbs2) # coinciding indices in i2
-   
-    length(ind1) == length(ind2) || error("huh?")
-
-    #display(ind1)
-    #display(ind2)
     out = deepcopy(i1)
-    out.E .+= i2.E
-    out.Pa[ind1, ind1] .+= i2.Pa[ind2, ind2]
-    out.Pb[ind1, ind1] .+= i2.Pb[ind2, ind2]
-    out.Gaa[ind1, ind1, ind1, ind1] .+= i2.Gaa[ind2, ind2, ind2, ind2]
-    out.Gab[ind1, ind1, ind1, ind1] .+= i2.Gab[ind2, ind2, ind2, ind2]
-    out.Gbb[ind1, ind1, ind1, ind1] .+= i2.Gbb[ind2, ind2, ind2, ind2]
-
+    add!(out,i2)
     return out 
 end

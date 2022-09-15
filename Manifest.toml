@@ -255,7 +255,7 @@ version = "0.2.2"
 deps = ["Documenter", "JLD2", "LinearAlgebra", "NPZ", "Random", "TensorOperations"]
 git-tree-sha1 = "169348fd2cd34c05f4c79a537b6db1039805c044"
 repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/InCoreIntegrals.jl"
+repo-url = "../InCoreIntegrals.jl"
 uuid = "d8079e1f-d74b-4a3d-abb0-c0b53e3a8379"
 version = "0.1.0"
 

@@ -34,6 +34,7 @@ include("type_Cluster.jl")
 include("PyscfFunctions.jl")
 include("incore_cmf.jl")
 include("direct_cmf.jl")
+include("type_Increment.jl")
 include("mbe.jl")
 
 end

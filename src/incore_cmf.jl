@@ -57,7 +57,7 @@ function form_1rdm_dressed_ints(ints::InCoreInts, orb_list, rdm1a, rdm1b)
 	end
     end
 
-    println(" Trace of env 1RDM: %12.8f",tr(denv_a + denv_b))
+    @printf(" Trace of env 1RDM: %12.8f\n",tr(denv_a + denv_b))
     #print(" Compute energy of 1rdm:")
 
     ga =  zeros(size(ints.h1)) 

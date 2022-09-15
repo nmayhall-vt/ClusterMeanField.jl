@@ -7,6 +7,22 @@ using NPZ
 using InCoreIntegrals
 using ActiveSpaceSolvers
 
+function run2()
+    atoms = []
+    R = .75
+    push!(atoms,Atom(1,"H",[-R, 0, 0]))
+    push!(atoms,Atom(2,"H",[ R, 0, 0]))
+    push!(atoms,Atom(3,"H",[ 0,-R, 0]))
+    push!(atoms,Atom(4,"H",[ 0, R, 0]))
+    push!(atoms,Atom(5,"H",[ 0, 0,-R]))
+    push!(atoms,Atom(6,"H",[ 0, 0, R]))
+    basis = "sto-3g"
+
+    mol     = Molecule(0,1,atoms,basis)
+    mf = ClusterMeanField.pyscf_do_scf(mol)
+    return mf
+end
+
 function run()
 # 
     atoms = []
@@ -59,7 +75,6 @@ function run()
     P = C'*S*P*S*C
     Pa = P*.5
     Pb = P*.5
-    
     ClusterMeanField.gamma_mbe(ints, clusters, init_fspace, Pa, Pb)
 end
 

@@ -62,9 +62,9 @@ function Base.display(incr::Increment)
     @printf("   E:          %12.8f\n",incr.E[1])
     @printf("   tr(Pa):     %12.8f\n",tr(incr.Pa))
     @printf("   tr(Pb):     %12.8f\n",tr(incr.Pb))
-    @printf("   tr(Gaa):    %12.8f\n",tr(incr.Gaa))
+    @printf("   tr(Gaa):    %12.8f\n",tr(incr.Gaa)*.5)
     @printf("   tr(Gab):    %12.8f\n",tr(incr.Gab))
-    @printf("   tr(Gbb):    %12.8f\n",tr(incr.Gbb))
+    @printf("   tr(Gbb):    %12.8f\n",tr(incr.Gbb)*.5)
 end
 
 function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)

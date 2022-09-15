@@ -27,9 +27,9 @@ function run()
 # 
     atoms = []
     push!(atoms,Atom(1,"He",[0,0,0]))
-    push!(atoms,Atom(2,"He",[1,0,0]))
-    push!(atoms,Atom(3,"He",[2,0,0]))
-    push!(atoms,Atom(4,"He",[3,0,0]))
+    push!(atoms,Atom(2,"He",[2,.1,0]))
+    push!(atoms,Atom(3,"He",[4,0,0]))
+    push!(atoms,Atom(4,"He",[6,0,0]))
     #push!(atoms,Atom(5,"He",[4,0,0]))
     #push!(atoms,Atom(6,"He",[5,0,0]))
     basis = "sto-3g"
@@ -75,7 +75,8 @@ function run()
     P = C'*S*P*S*C
     Pa = P*.5
     Pb = P*.5
-    ClusterMeanField.gamma_mbe(ints, clusters, init_fspace, Pa, Pb)
+    ClusterMeanField.gamma_mbe(5, ints, clusters, init_fspace, Pa, Pb)
+    @printf(" EFCI: %12.8f\n", e_fci+ints.h0)
 end
 
 run()

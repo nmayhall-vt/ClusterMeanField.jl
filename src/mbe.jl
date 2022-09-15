@@ -136,17 +136,6 @@ function LinearAlgebra.tr(A::Array{T,4}) where T
 end
 #=}}}=#
 
-"""
-    spin_trace(rdm1::Dict{String,Array{T,2}}, rdm2::Dict{String,Array{T,4}})
-
-Integrate out spin from our RDMs
-
-P = Pa + Pb
-G = Gaa + Gbb + 2Gab
-"""
-function spin_trace(rdm1::Dict{String,Array{T,2}}, rdm2::Dict{String,Array{T,4}}) where T
-    return rdm1["a"] .+ rdm1["b"], rdm2["aa"] .+ 2 .* rdm2["ab"] .+ rdm2["bb"]
-end
 
 function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fspace, rdm1a, rdm1b; 
                            verbose=0, max_cycle=100, conv_tol=1e-8, screen=1e-12) where T
@@ -192,13 +181,7 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
         if (na == no) && (nb == no)
             #
             # doubly occupied space
-            for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                d2aa[p,q,r,s] = d1a[p,q]*d1a[r,s] - d1a[p,s]*d1a[r,q]
-                d2bb[p,q,r,s] = d1b[p,q]*d1b[r,s] - d1b[p,s]*d1b[r,q]
-                d2ab[p,q,r,s] = d1a[p,q]*d1b[r,s]
-            end
-            #e = compute_energy(ints_i, d1a + d1b, d2aa + 2*d2ab + d2bb)
-            #verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
+            (d2aa, d2ab, d2bb) = build_2rdm((d1a, d1b))
             e = compute_energy(ints_i, (d1a, d1b))
             verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
 
@@ -242,33 +225,49 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
         nelec = na + nb
         e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
         (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
+
+
     end
       
     out.E .= [e]
-    out.Pa  .= d1a
-    out.Pb  .= d1b
-    out.Gaa .= d2aa
-    out.Gab .= d2ab
-    out.Gbb .= d2bb
+    out.Da  .= d1a
+    out.Db  .= d1b
+    out.Daa .= d2aa
+    out.Dab .= d2ab
+    out.Dbb .= d2bb
+
+
+    (tmpaa, tmpab, tmpbb) = build_2rdm((d1a, d1b))
+    out.Caa .= d2aa .- tmpaa
+    out.Cab .= d2ab .- tmpab
+    out.Cbb .= d2bb .- tmpbb
 
     return out 
     #=}}}=#
 end
 
 """
-    build_cumulant(rdm2, rdm1)
+    build_2rdm((Da,Db))
 
-take in rdms and construct cumulant
+take in rdms and construct 2rdm
 # Arguments:
-- `rdm2`: 2rdm ordered [1,1,2,2] such that E+= 1/2 (p,q|r,s)2rdm[p,q,r,s]
-- `rdm1`: 1rdm 
-"""
-function build_cumulant(rdm2, rdm1)
+- `rdm1`: tuple of 1rdm's (alpha, beta)
 
-    c = zeros(size(rdm2))
-    @tensor begin
-        c[p,q,r,s] = rdm2[p,q,r,s] - rdm1[p,q]*rdm1[r,s] + rdm1[p,s]*rdm1[q,r]
+# Returns:
+- `Tuple` of 2rdms, (aa, ab, bb) spin cases.
+"""
+function build_2rdm((Da,Db))
+
+    no = size(Da,1)
+    Daa = zeros(no, no, no, no)
+    Dab = zeros(no, no, no, no)
+    Dbb = zeros(no, no, no, no)
+    for p in 1:no, q in 1:no, r in 1:no, s in 1:no
+        Daa[p,q,r,s] = Da[p,q]*Da[r,s] - Da[p,s]*Da[r,q]
+        Dbb[p,q,r,s] = Db[p,q]*Db[r,s] - Db[p,s]*Db[r,q]
+        Dab[p,q,r,s] = Da[p,q]*Db[r,s]
     end
+    return (Daa, Dab, Dbb)
 end
 
 function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1, thresh=1e-12) where T
@@ -282,9 +281,7 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
     E0 = compute_energy(ints, ref_data)
     ref_data.E .= E0
 
-    println(" Nick")
-    display(compute_energy(ints, (rdm1a, rdm1b)))
-    display(compute_energy(ints, ref_data))
+    println(" Reference Data")
     display(ref_data)
 
 

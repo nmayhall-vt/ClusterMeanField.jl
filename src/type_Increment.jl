@@ -1,22 +1,25 @@
 using ClusterMeanField
 
+
+
 struct Increment{T}
     #term::NTuple{N,Int}
     clusters::Vector{Cluster}
+    # energy 
     E::Array{T,1}
-    Pa::Array{T,2}
-    Pb::Array{T,2}
-    Gaa::Array{T,4}
-    Gab::Array{T,4}
-    Gbb::Array{T,4}
+    # 1-rdm 
+    Da::Array{T,2}
+    Db::Array{T,2}
+    # 2-rdm 
+    Daa::Array{T,4}
+    Dab::Array{T,4}
+    Dbb::Array{T,4}
+    # cumulants
+    Caa::Array{T,4}
+    Cab::Array{T,4}
+    Cbb::Array{T,4}
 end
 
-"""
-    Increment(n::Int; T=Float64)
-"""
-function Increment(; n=1, T=Float64)
-    return Increment{T}([Cluster(0, [i for i in 1:n])], [0.0], zeros(n,n), zeros(n,n), zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
-end
 
 """
     Increment(c::Cluster; T=Float64)
@@ -26,7 +29,10 @@ function Increment(clusters::Vector{Cluster}; T=Float64)
     for ci in clusters 
         n += length(ci)
     end
-    return Increment{T}(clusters, [0.0], zeros(n,n), zeros(n,n), zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
+    return Increment{T}(clusters, [0.0], 
+                        zeros(n,n), zeros(n,n), 
+                        zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n),
+                        zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
 end
 
 """
@@ -37,43 +43,48 @@ function Increment(clusters::Vector{Cluster}, da::Array{T,2}, db::Array{T,2})  w
     n == size(da,2) || throw(DimensionMismatch)
     n == size(db,1) || throw(DimensionMismatch)
     n == size(db,2) || throw(DimensionMismatch)
-    incr = Increment{T}(clusters, [0.0], da, db, zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
-    Gaa = incr.Gaa
-    Gab = incr.Gab
-    Gbb = incr.Gbb
+    incr = Increment{T}(clusters, [0.0], da, db, 
+                        zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n),
+                        zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n))
+    Daa = incr.Daa
+    Dab = incr.Dab
+    Dbb = incr.Dbb
     @tensor begin
-        Gaa[p,q,r,s] += da[p,q] * da[r,s]
-        Gaa[p,q,r,s] -= da[p,s] * da[r,q]
+        Daa[p,q,r,s] += da[p,q] * da[r,s]
+        Daa[p,q,r,s] -= da[p,s] * da[r,q]
 
-        Gbb[p,q,r,s] += db[p,q] * db[r,s]
-        Gbb[p,q,r,s] -= db[p,s] * db[r,q]
+        Dbb[p,q,r,s] += db[p,q] * db[r,s]
+        Dbb[p,q,r,s] -= db[p,s] * db[r,q]
 
-        Gab[p,q,r,s] += da[p,q] * db[r,s]
+        Dab[p,q,r,s] += da[p,q] * db[r,s]
     end
-    incr.Gaa .= Gaa
-    incr.Gab .= Gab
-    incr.Gbb .= Gbb
+    incr.Daa .= Daa
+    incr.Dab .= Dab
+    incr.Dbb .= Dbb
     return incr
 end
 function Base.display(incr::Increment)
     @printf(" :Increment:   ")
     [@printf("%3i",i.idx) for i in incr.clusters]
     println()
-    @printf("   E:          %12.8f\n",incr.E[1])
-    @printf("   tr(Pa):     %12.8f\n",tr(incr.Pa))
-    @printf("   tr(Pb):     %12.8f\n",tr(incr.Pb))
-    @printf("   tr(Gaa):    %12.8f\n",tr(incr.Gaa)*.5)
-    @printf("   tr(Gab):    %12.8f\n",tr(incr.Gab))
-    @printf("   tr(Gbb):    %12.8f\n",tr(incr.Gbb)*.5)
+    @printf("   E:       %12.8f\n",incr.E[1])
+    @printf("   tr(Da):  %12.8f   norm(Da):  %12.8f\n",tr(incr.Da)     ,norm(incr.Da)     )
+    @printf("   tr(Db):  %12.8f   norm(Db):  %12.8f\n",tr(incr.Db)     ,norm(incr.Db)     )
+    @printf("   tr(Daa): %12.8f   norm(Daa): %12.8f\n",tr(incr.Daa)*.5 ,norm(incr.Daa) )
+    @printf("   tr(Dab): %12.8f   norm(Dab): %12.8f\n",tr(incr.Dab)    ,norm(incr.Dab) )
+    @printf("   tr(Dbb): %12.8f   norm(Dbb): %12.8f\n",tr(incr.Dbb)*.5 ,norm(incr.Dbb) )
+    @printf("   tr(Caa): %12.8f   norm(Caa): %12.8f\n",tr(incr.Caa)*.5 ,norm(incr.Caa) )
+    @printf("   tr(Cab): %12.8f   norm(Cab): %12.8f\n",tr(incr.Cab)    ,norm(incr.Cab) )
+    @printf("   tr(Cbb): %12.8f   norm(Cbb): %12.8f\n",tr(incr.Cbb)*.5 ,norm(incr.Cbb) )
 end
 
 function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)
     e = ints.h0
-    e += sum(ints.h1 .* incr.Pa)
-    e += sum(ints.h1 .* incr.Pb)
-    e += .5*sum(ints.h2 .* incr.Gaa)
-    e += .5*sum(ints.h2 .* incr.Gbb)
-    e += sum(ints.h2 .* incr.Gab)
+    e += sum(ints.h1 .* incr.Da)
+    e += sum(ints.h1 .* incr.Db)
+    e += .5*sum(ints.h2 .* incr.Daa)
+    e += .5*sum(ints.h2 .* incr.Dbb)
+    e += sum(ints.h2 .* incr.Dab)
     return e
 end
 
@@ -92,11 +103,14 @@ function add!(i1::Increment, i2::Increment)
     length(ind1) == length(ind2) || error("huh?")
 
     i1.E .+= i2.E
-    i1.Pa[ind1, ind1] .+= i2.Pa[ind2, ind2]
-    i1.Pb[ind1, ind1] .+= i2.Pb[ind2, ind2]
-    i1.Gaa[ind1, ind1, ind1, ind1] .+= i2.Gaa[ind2, ind2, ind2, ind2]
-    i1.Gab[ind1, ind1, ind1, ind1] .+= i2.Gab[ind2, ind2, ind2, ind2]
-    i1.Gbb[ind1, ind1, ind1, ind1] .+= i2.Gbb[ind2, ind2, ind2, ind2]
+    i1.Da[ind1, ind1] .+= i2.Da[ind2, ind2]
+    i1.Db[ind1, ind1] .+= i2.Db[ind2, ind2]
+    i1.Daa[ind1, ind1, ind1, ind1] .+= i2.Daa[ind2, ind2, ind2, ind2]
+    i1.Dab[ind1, ind1, ind1, ind1] .+= i2.Dab[ind2, ind2, ind2, ind2]
+    i1.Dbb[ind1, ind1, ind1, ind1] .+= i2.Dbb[ind2, ind2, ind2, ind2]
+    i1.Caa[ind1, ind1, ind1, ind1] .+= i2.Caa[ind2, ind2, ind2, ind2]
+    i1.Cab[ind1, ind1, ind1, ind1] .+= i2.Cab[ind2, ind2, ind2, ind2]
+    i1.Cbb[ind1, ind1, ind1, ind1] .+= i2.Cbb[ind2, ind2, ind2, ind2]
     return
 end
 
@@ -115,11 +129,14 @@ function subtract!(i1::Increment, i2::Increment)
     length(ind1) == length(ind2) || error("huh?")
 
     i1.E .-= i2.E
-    i1.Pa[ind1, ind1] .-= i2.Pa[ind2, ind2]
-    i1.Pb[ind1, ind1] .-= i2.Pb[ind2, ind2]
-    i1.Gaa[ind1, ind1, ind1, ind1] .-= i2.Gaa[ind2, ind2, ind2, ind2]
-    i1.Gab[ind1, ind1, ind1, ind1] .-= i2.Gab[ind2, ind2, ind2, ind2]
-    i1.Gbb[ind1, ind1, ind1, ind1] .-= i2.Gbb[ind2, ind2, ind2, ind2]
+    i1.Da[ind1, ind1] .-= i2.Da[ind2, ind2]
+    i1.Db[ind1, ind1] .-= i2.Db[ind2, ind2]
+    i1.Daa[ind1, ind1, ind1, ind1] .-= i2.Daa[ind2, ind2, ind2, ind2]
+    i1.Dab[ind1, ind1, ind1, ind1] .-= i2.Dab[ind2, ind2, ind2, ind2]
+    i1.Dbb[ind1, ind1, ind1, ind1] .-= i2.Dbb[ind2, ind2, ind2, ind2]
+    i1.Caa[ind1, ind1, ind1, ind1] .-= i2.Caa[ind2, ind2, ind2, ind2]
+    i1.Cab[ind1, ind1, ind1, ind1] .-= i2.Cab[ind2, ind2, ind2, ind2]
+    i1.Cbb[ind1, ind1, ind1, ind1] .-= i2.Cbb[ind2, ind2, ind2, ind2]
 
     return
 end

@@ -97,11 +97,20 @@ function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)
     return e
 end
 
+"""
+    update_2rdm_with_cumulant!(incr::Increment)
+"""
 function update_2rdm_with_cumulant!(incr::Increment)
     (aa,ab,bb) = build_2rdm((incr.Da, incr.Db))
     incr.Daa .= incr.Caa .+ aa 
     incr.Dab .= incr.Cab .+ ab 
     incr.Dbb .= incr.Cbb .+ bb 
+    return 
+end
+
+function update_1rdm_with_2rdm!(incr::Increment)
+    incr.Da .= integrate_rdm2(incr.Daa) 
+    incr.Db .= integrate_rdm2(incr.Dbb) 
     return 
 end
 

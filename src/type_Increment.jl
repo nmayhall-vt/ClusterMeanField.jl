@@ -68,14 +68,23 @@ function Base.display(incr::Increment)
     [@printf("%3i",i.idx) for i in incr.clusters]
     println()
     @printf("   E:       %12.8f\n",incr.E[1])
-    @printf("   tr(Da):  %12.8f   norm(Da):  %12.8f\n",tr(incr.Da)     ,norm(incr.Da)     )
-    @printf("   tr(Db):  %12.8f   norm(Db):  %12.8f\n",tr(incr.Db)     ,norm(incr.Db)     )
-    @printf("   tr(Daa): %12.8f   norm(Daa): %12.8f\n",tr(incr.Daa)*.5 ,norm(incr.Daa) )
-    @printf("   tr(Dab): %12.8f   norm(Dab): %12.8f\n",tr(incr.Dab)    ,norm(incr.Dab) )
-    @printf("   tr(Dbb): %12.8f   norm(Dbb): %12.8f\n",tr(incr.Dbb)*.5 ,norm(incr.Dbb) )
+    @printf("   tr(Da):  %12.8f\n",tr(incr.Da)     )
+    @printf("   tr(Db):  %12.8f\n",tr(incr.Db)     )
+    @printf("   tr(Daa): %12.8f\n",tr(incr.Daa)*.5 )
+    @printf("   tr(Dab): %12.8f\n",tr(incr.Dab)    )
+    @printf("   tr(Dbb): %12.8f\n",tr(incr.Dbb)*.5 )
     @printf("   tr(Caa): %12.8f   norm(Caa): %12.8f\n",tr(incr.Caa)*.5 ,norm(incr.Caa) )
     @printf("   tr(Cab): %12.8f   norm(Cab): %12.8f\n",tr(incr.Cab)    ,norm(incr.Cab) )
     @printf("   tr(Cbb): %12.8f   norm(Cbb): %12.8f\n",tr(incr.Cbb)*.5 ,norm(incr.Cbb) )
+    
+#    @printf("   tr(Da):  %12.8f   norm(Da):  %12.8f\n",tr(incr.Da)     ,norm(incr.Da)  )
+#    @printf("   tr(Db):  %12.8f   norm(Db):  %12.8f\n",tr(incr.Db)     ,norm(incr.Db)  )
+#    @printf("   tr(Daa): %12.8f   norm(Daa): %12.8f\n",tr(incr.Daa)*.5 ,norm(incr.Daa) )
+#    @printf("   tr(Dab): %12.8f   norm(Dab): %12.8f\n",tr(incr.Dab)    ,norm(incr.Dab) )
+#    @printf("   tr(Dbb): %12.8f   norm(Dbb): %12.8f\n",tr(incr.Dbb)*.5 ,norm(incr.Dbb) )
+#    @printf("   tr(Caa): %12.8f   norm(Caa): %12.8f\n",tr(incr.Caa)*.5 ,norm(incr.Caa) )
+#    @printf("   tr(Cab): %12.8f   norm(Cab): %12.8f\n",tr(incr.Cab)    ,norm(incr.Cab) )
+#    @printf("   tr(Cbb): %12.8f   norm(Cbb): %12.8f\n",tr(incr.Cbb)*.5 ,norm(incr.Cbb) )
 end
 
 function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)
@@ -86,6 +95,14 @@ function InCoreIntegrals.compute_energy(ints::InCoreInts, incr::Increment)
     e += .5*sum(ints.h2 .* incr.Dbb)
     e += sum(ints.h2 .* incr.Dab)
     return e
+end
+
+function update_2rdm_with_cumulant!(incr::Increment)
+    (aa,ab,bb) = build_2rdm((incr.Da, incr.Db))
+    incr.Daa .= incr.Caa .+ aa 
+    incr.Dab .= incr.Cab .+ ab 
+    incr.Dbb .= incr.Cbb .+ bb 
+    return 
 end
 
 """

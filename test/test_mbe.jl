@@ -77,8 +77,14 @@ function run()
     P = C'*S*P*S*C
     Pa = P*.5
     Pb = P*.5
-    out, increments = ClusterMeanField.gamma_mbe(3, ints, clusters, init_fspace, Pa, Pb)
+    out, increments = ClusterMeanField.gamma_mbe(5, ints, clusters, init_fspace, Pa, Pb)
     @printf(" EFCI: %12.8f\n", e_fci+ints.h0)
+
+    @printf(" Energy with 2rdm expansion:     %12.8f\n", compute_energy(ints, out))
+    display(out)
+    ClusterMeanField.update_2rdm_with_cumulant!(out)
+    @printf(" Energy with cumulant expansion: %12.8f\n", compute_energy(ints, out))
+    display(out)
 
 
     return ints, out, increments

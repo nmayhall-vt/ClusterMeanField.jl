@@ -182,3 +182,21 @@ function Base.:+(i1::Increment, i2::Increment)
     add!(out,i2)
     return out 
 end
+
+
+function build_fockian(ints::InCoreInts, inc::Increment)
+    n = n_orb(ints)
+    fa = deepcopy(ints.h1)
+    fb = deepcopy(ints.h1)
+    @tensor begin
+        fa[p,q] += ints.h2[p,q,r,s] * inc.Da[r,s]
+        fa[p,q] -= ints.h2[p,s,r,q] * inc.Da[r,s]
+        fa[p,q] += ints.h2[p,q,r,s] * inc.Db[r,s]
+        
+        fb[p,q] += ints.h2[p,q,r,s] * inc.Db[r,s]
+        fb[p,q] -= ints.h2[p,s,r,q] * inc.Db[r,s]
+        fb[p,q] += ints.h2[p,q,r,s] * inc.Da[r,s]
+    end
+    display( tr(fa*inc.Da + fb*inc.Db) + ints.h0)
+    return (fa,fb)
+end

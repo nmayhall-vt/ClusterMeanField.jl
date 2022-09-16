@@ -37,6 +37,14 @@ using ActiveSpaceSolvers
     P = C'*S*P*S*C
     Pa = P*.5
     Pb = P*.5
+    out_hf = ClusterMeanField.Increment(clusters, Pa, Pb)
+    ehf = compute_energy(ints, out_hf)
+    @test isapprox(ehf, mf.e_tot, atol=1e-9)
+    f = ClusterMeanField.build_fockian(ints, out_hf)
+    tmp = mf.get_fock()
+    tmp = mf.mo_coeff'*tmp*mf.mo_coeff
+
+    @test isapprox(norm(f[1] - tmp), 0, atol=1e-12)
 
     out, increments = ClusterMeanField.gamma_mbe(3, ints, clusters, init_fspace, Pa, Pb, verbose=0)
     display(out.E[1])

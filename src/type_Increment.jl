@@ -29,6 +29,7 @@ function Increment(clusters::Vector{Cluster}; T=Float64)
     for ci in clusters 
         n += length(ci)
     end
+    println("n: ", n)
     return Increment{T}(clusters, [0.0], 
                         zeros(n,n), zeros(n,n), 
                         zeros(n,n,n,n), zeros(n,n,n,n), zeros(n,n,n,n),

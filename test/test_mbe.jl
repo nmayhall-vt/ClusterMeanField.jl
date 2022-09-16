@@ -38,11 +38,21 @@ using ActiveSpaceSolvers
     Pa = P*.5
     Pb = P*.5
 
-    out, increments = ClusterMeanField.gamma_mbe(3, ints, clusters, init_fspace, Pa, Pb)
-    @test isapprox(out.E[1], -11.46855056, atol=1e-7)
+    out, increments = ClusterMeanField.gamma_mbe(3, ints, clusters, init_fspace, Pa, Pb, verbose=0)
+    display(out.E[1])
+    @test isapprox(out.E[1], -11.468550564963303, atol=1e-12)
+    e = compute_energy(ints, out)
+    display(e)
+    @test isapprox(e, -11.470870327910571, atol=1e-12)
 
-    out, increments = ClusterMeanField.gamma_mbe(5, ints, clusters, init_fspace, Pa, Pb)
+    ClusterMeanField.update_2rdm_with_cumulant!(out)
+    e = compute_energy(ints, out)
+    @test isapprox(e, -11.468585684352316, atol=1e-12)
+    display(e)
+
+    out, increments = ClusterMeanField.gamma_mbe(5, ints, clusters, init_fspace, Pa, Pb, verbose=0)
     err = norm(out.Da - ClusterMeanField.integrate_rdm2(out.Daa))
+    @test isapprox(err, 0.0, atol=1e-12)
 end
 
 

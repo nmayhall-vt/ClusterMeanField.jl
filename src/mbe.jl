@@ -160,6 +160,8 @@ function LinearAlgebra.tr(A::Array{T,4}) where T
 end
 #=}}}=#
 
+function fno_transformation(ints::InCoreInts)
+end
 
 function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fspace, rdm1a, rdm1b; 
                            verbose=0, max_cycle=100, conv_tol=1e-8, screen=1e-12) where T
@@ -180,7 +182,7 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
     end
 
     ci = Cluster(0, orb_list)   # this is our cluster for this increment
-
+    display(ci)
     out = Increment(cluster_set)
     no_tot = n_orb(ints) 
 
@@ -188,7 +190,6 @@ function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fs
 
     ansatz = FCIAnsatz(length(ci), na, nb)
     verbose < 1 || display(ansatz)
-    ints_i = subset(ints, ci.orb_list, rdm1a, rdm1b)
     ints_i = subset(ints, ci, rdm1a, rdm1b)
     #ints_i = form_1rdm_dressed_ints(ints, ci.orb_list, rdm1a, rdm1b)
         
@@ -294,7 +295,7 @@ function build_2rdm((Da,Db))
     return (Daa, Dab, Dbb)
 end
 
-function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1, thresh=1e-12) where T
+function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1, thresh=1e-12, fno=1e-4) where T
     N = sum([length(ci) for ci in clusters])
     N == size(rdm1a,1) || throw(DimensionMismatch)
     
@@ -312,6 +313,7 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
     # Start by just doing everything int the full space (dumb)
 
     increments = Dict{Tuple,Increment{T}}()
+    results = Dict{Tuple,Increment{T}}()
 
     n_clusters = length(clusters)
     # 1-body
@@ -319,6 +321,7 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
         for i in 1:n_clusters
             ci = clusters[i]
             out_i = compute_increment(ints, [ci], fspace, rdm1a, rdm1b, verbose=verbose)
+            results[(i,)] = out_i
 
             # subtract the hartree fock data so that we have an increment from HF
             out_i = out_i - ref_data
@@ -337,6 +340,7 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                 ci = clusters[i]
                 cj = clusters[j]
                 out_i = compute_increment(ints, [ci, cj], fspace, rdm1a, rdm1b, verbose=verbose)
+                results[(i,j)] = out_i
 
                 # subtract the hartree fock data so that we have an increment from HF
                 out_i = out_i - ref_data
@@ -358,11 +362,23 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                     ci = clusters[i]
                     cj = clusters[j]
                     ck = clusters[k]
-
+                    
+                    if true 
+                    #if fno != nothing
+                        tmp = Increment([ci, cj, ck])
+                        #add!(tmp, results[(i,j)])
+                        #add!(tmp, results[(i,k)])
+                        #add!(tmp, results[(j,k)])
+                        println("tmp: ", size(tmp.Da))
+                        D = (tmp.Da + tmp.Db) 
+                        n, U = eigen(D)
+                        display(n)
+                    end
                     #screen((i, j, k), thresh, increments) == false || continue
 
                     out_i = compute_increment(ints, [ci, cj, ck], fspace, rdm1a, rdm1b, verbose=verbose)
-
+                    println("out: ", size(out_i.Da))
+                    results[(i,j,k)] = out_i
                     # subtract the hartree fock data so that we have an increment from HF
                     out_i = out_i - ref_data
 

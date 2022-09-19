@@ -9,8 +9,8 @@ g_{pq} = <[H,p'q-q'p]> for p<q
 
 # Arguments
 - `ints`: Integrals
-- `rdm1`: Spin summed 1RDM
-- `rdm2`: Spin summed 2RDM
+- `rdm1`: Spin summed 1RDM, NxN
+- `rdm2`: Spin summed 2RDM, NxNxNxN
 """
 function build_orbital_gradient(ints::InCoreInts, rdm1::Array{T,2}, rdm2::Array{T,4}; verbose=0) where T
     verbose == 0 || println(" In build_orbital_gradient")

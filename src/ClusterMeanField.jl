@@ -30,9 +30,14 @@ export get_ovlp
 include("type_Atom.jl")
 include("type_Molecule.jl")
 include("type_Cluster.jl")
+include("type_RDM.jl")
 include("PyscfFunctions.jl")
 include("incore_cmf.jl")
 include("direct_cmf.jl")
 include("newton.jl")
 
+export RDM1
+export RDM2
+export ssRDM1
+export ssRDM2
 end

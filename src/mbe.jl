@@ -164,7 +164,7 @@ function fno_transformation(ints::InCoreInts)
 end
 
 function compute_increment(ints::InCoreInts{T}, cluster_set::Vector{Cluster}, fspace, rdm1a, rdm1b; 
-                           verbose=0, max_cycle=100, conv_tol=1e-8, screen=1e-12) where T
+                           verbose=0, max_cycle=100, conv_tol=1e-10, screen=1e-12) where T
     #={{{=#
     verbose < 1 || @printf( "\n*Compute increment for cluster:     ")
     verbose < 1 || [@printf("%3i",c.idx)  for c in cluster_set]
@@ -295,7 +295,7 @@ function build_2rdm((Da,Db))
     return (Daa, Dab, Dbb)
 end
 
-function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1, thresh=1e-12, fno=1e-4) where T
+function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; verbose=1, thresh=1e-12) where T
     N = sum([length(ci) for ci in clusters])
     N == size(rdm1a,1) || throw(DimensionMismatch)
     
@@ -363,17 +363,17 @@ function gamma_mbe(nbody, ints::InCoreInts{T}, clusters, fspace, rdm1a, rdm1b; v
                     cj = clusters[j]
                     ck = clusters[k]
                     
-                    if true 
-                    #if fno != nothing
-                        tmp = Increment([ci, cj, ck])
-                        #add!(tmp, results[(i,j)])
-                        #add!(tmp, results[(i,k)])
-                        #add!(tmp, results[(j,k)])
-                        println("tmp: ", size(tmp.Da))
-                        D = (tmp.Da + tmp.Db) 
-                        n, U = eigen(D)
-                        display(n)
-                    end
+                    #if true 
+                    ##if fno != nothing
+                    #    tmp = Increment([ci, cj, ck])
+                    #    #add!(tmp, results[(i,j)])
+                    #    #add!(tmp, results[(i,k)])
+                    #    #add!(tmp, results[(j,k)])
+                    #    println("tmp: ", size(tmp.Da))
+                    #    D = (tmp.Da + tmp.Db) 
+                    #    n, U = eigen(D)
+                    #    display(n)
+                    #end
                     #screen((i, j, k), thresh, increments) == false || continue
 
                     out_i = compute_increment(ints, [ci, cj, ck], fspace, rdm1a, rdm1b, verbose=verbose)

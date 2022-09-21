@@ -1,93 +1,5 @@
 using ClusterMeanField
 
-"""
-	form_1rdm_dressed_ints(ints::InCoreInts, orb_list, rdm1a, rdm1b)
-
-Obtain a subset of integrals which act on the orbitals in MOCluster,
-embedding the 1rdm from the rest of the system
-
-Returns an `InCoreInts` type
-"""
-function form_1rdm_dressed_ints(ints::InCoreInts, orb_list, rdm1a, rdm1b)
-    norb_act = size(orb_list)[1]
-    full_orb = size(rdm1a)[1]
-    h = zeros(norb_act,norb_act)
-    f = zeros(norb_act,norb_act)
-    v = zeros(norb_act,norb_act,norb_act,norb_act)
-    da = zeros(norb_act,norb_act)
-    db = zeros(norb_act,norb_act)
-
-
-    for (pi,p) in enumerate(orb_list)
-        for (qi,q) in enumerate(orb_list)
-            h[pi,qi] = ints.h1[p,q]
-            da[pi,qi] = rdm1a[p,q]
-            db[pi,qi] = rdm1b[p,q]
-        end
-    end
-
-
-    for (pi,p) in enumerate(orb_list)
-        for (qi,q) in enumerate(orb_list)
-            for (ri,r) in enumerate(orb_list)
-                for (si,s) in enumerate(orb_list)
-                    v[pi,qi,ri,si] = ints.h2[p,q,r,s]
-                end
-            end
-        end
-    end
-
-    println(" Compute single particle embedding potential")
-    denv_a = 1.0*rdm1a
-    denv_b = 1.0*rdm1b
-    dact_a = 0.0*rdm1a
-    dact_b = 0.0*rdm1b
-
-    for (pi,p) in enumerate(orb_list)
-    	for (qi,q) in enumerate(1:size(rdm1a)[1])
-        denv_a[p,q] = 0
-	    denv_b[p,q] = 0
-	    denv_a[q,p] = 0
-	    denv_b[q,p] = 0
-
-	    dact_a[p,q] = rdm1a[p,q]
-	    dact_b[p,q] = rdm1b[p,q]
-	    dact_a[q,p] = rdm1a[q,p]
-	    dact_b[q,p] = rdm1b[q,p]
-	end
-    end
-
-    println(" Trace of env 1RDM: %12.8f",tr(denv_a + denv_b))
-    #print(" Compute energy of 1rdm:")
-
-    ga =  zeros(size(ints.h1)) 
-    gb =  zeros(size(ints.h1)) 
-
-    @tensor begin
-        ga[r,s] += ints.h2[p,q,r,s] * (denv_a[p,q] + denv_b[p,q])
-        ga[q,r] -= ints.h2[p,q,r,s] * (denv_a[p,s])
-
-        gb[r,s] += ints.h2[p,q,r,s] * (denv_a[p,q] + denv_b[p,q])
-        gb[q,r] -= ints.h2[p,q,r,s] * (denv_b[p,s])
-    end
-
-    De = denv_a + denv_b
-    Fa = ints.h1 + .5*ga
-    Fb = ints.h1 + .5*gb
-    F = ints.h1 + .25*(ga + gb)
-    Eenv = tr(De * F) 
-   
-    f = zeros(norb_act,norb_act)
-    for (pi,p) in enumerate(orb_list)
-        for (qi,q) in enumerate(orb_list)
-            f[pi,qi] =  F[p,q]
-	end
-    end
-
-    t = 2*f-h
-    ints_i = InCoreInts(ints.h0, t, v)
-    return ints_i
-end
 
 
 """
@@ -124,15 +36,15 @@ end
 
 
 """
-	compute_cmf_energy(ints, rdm1s, rdm2s, clusters)
+    QCBase.compute_energy(ints::InCoreInts{T}, rdm1s::Dict{Integer,RDM1{T}}, rdm2s::Dict{Integer,RDM2{T}}, clusters::Vector{MOCluster}; verbose=0) where T
 
 Compute the energy of a cluster-wise product state (CMF),
 specified by a list of 1 and 2 particle rdms local to each cluster.
 This method uses the full system integrals.
 
 - `ints::InCoreInts`: integrals for full system
-- `rdm1s`: dictionary (`ci.idx => Array`) of 1rdms from each cluster (spin summed)
-- `rdm2s`: dictionary (`ci.idx => Array`) of 2rdms from each cluster (spin summed)
+- `rdm1s`: dictionary (`ci.idx => RDM1`) of 1rdms from each cluster
+- `rdm2s`: dictionary (`ci.idx => RDM2`) of 2rdms from each cluster
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 
 return the total CMF energy
@@ -213,7 +125,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             d2 = build_2rdm(d1)
             e = compute_energy(ints_i, d1)
             verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
-            
+            error("nyi") 
             d1 = RDM1(d1a, d1b)
             d2 = RDM2(d2aa, d2ab, d2bb)
 
@@ -221,13 +133,26 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             #
             # run PYSCF FCI
             #e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
-            
+           
             solver = SolverSettings(verbose=1)
             solution = solve(ints_i, ansatz, solver)
             d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
             
+            #@printf(" FCI : %12.8f\n",solution.energies[1])
             d1 = RDM1(d1a, d1b)
             d2 = RDM2(d2aa, d2ab, d2bb)
+
+#            pyscf = pyimport("pyscf")
+#            fci = pyimport("pyscf.fci")
+#            cisolver = pyscf.fci.direct_spin1.FCI()
+#            cisolver.max_cycle = 100 
+#            cisolver.conv_tol = 1e-8
+#            nelec = na + nb
+#            e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
+#            (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
+#
+#            d1 = RDM1(d1a, d1b)
+#            d2 = RDM2(d2aa, d2ab, d2bb)
 
         end
 
@@ -248,11 +173,37 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
     return e_curr, rdm1_dict, rdm2_dict
 end
 
-function orbital_rotation!(d::RDM1{T}, U) where T
-    d.a .= U'*d.a*U
-    d.b .= U'*d.b*U
+function orbital_rotation!(d2::ssRDM2{T}, U) where T
+    @tensor begin
+        d[p,q,r,s] := U[t,p] * d2.rdm[t,q,r,s]
+        d[p,q,r,s] := U[t,q] * d[p,t,r,s]
+        d[p,q,r,s] := U[t,r] * d[p,q,t,s]
+        d[p,q,r,s] := U[t,s] * d[p,q,r,t]
+    end
+    d2.rdm .= d
 end
-function InCoreIntegrals.orbital_rotation(d::RDM1{T}, U) where T
+function orbital_rotation!(d::ssRDM1{T}, U) where T
+    tmp = U'*d.rdm*U
+    #@tensor begin
+    #    d[p,q] := U[t,p] * d1.rdm[t,q]
+    #    d[p,q] := U[t,q] * d[p,t]
+    #end
+    #d1.rdm .= d
+    d.rdm .= tmp
+end
+function orbital_rotation!(d1::RDM1{T}, U) where T
+    #d.a .= U'*d.a*U
+    #d.b .= U'*d.b*U
+    @tensor begin
+        da[p,q] := U[t,p] * d1.a[t,q]
+        db[p,q] := U[t,p] * d1.b[t,q]
+        da[p,q] := U[t,q] * da[p,t]
+        db[p,q] := U[t,q] * db[p,t]
+    end
+    d1.a .= da
+    d1.b .= db
+end
+function InCoreIntegrals.orbital_rotation(d, U) where T
     d2 = deepcopy(d)
     orbital_rotation!(d2,U)
     return d2
@@ -628,17 +579,22 @@ function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM
     end
    
     rdm2 = RDM2(rdm1)
-
     for ci in clusters
         rdm2.aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx].aa
         rdm2.ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx].ab
         rdm2.bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx].bb
+        #no = length(ci)
+        #for p in 1:no, q in 1:no, r in 1:no, s in 1:no  
+        #    rdm2.aa[ci.orb_list[p], ci.orb_list[q], ci.orb_list[r], ci.orb_list[s]] = rdm2s[ci.idx].aa[p,q,r,s]
+        #    rdm2.ab[ci.orb_list[p], ci.orb_list[q], ci.orb_list[r], ci.orb_list[s]] = rdm2s[ci.idx].ab[p,q,r,s]
+        #    rdm2.bb[ci.orb_list[p], ci.orb_list[q], ci.orb_list[r], ci.orb_list[s]] = rdm2s[ci.idx].bb[p,q,r,s]
+        #end
     end
     return rdm1, rdm2
 end
 
 
-
+#
 """
     orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
                                     gconv = 1e-8,

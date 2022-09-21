@@ -9,7 +9,8 @@ using InCoreIntegrals
 using ActiveSpaceSolvers
 
 
-@testset "CMF" begin
+if false 
+#@testset "CMF" begin
     #h0 = npzread("h6_sto3g/h0.npy")
     #h1 = npzread("h6_sto3g/h1.npy")
     #h2 = npzread("h6_sto3g/h2.npy")
@@ -87,9 +88,9 @@ end
     push!(atoms,Atom(1,"H",[0,0,0]))
     push!(atoms,Atom(2,"H",[1,0,0]))
     push!(atoms,Atom(3,"H",[2,0,0]))
-    push!(atoms,Atom(4,"H",[3,0,20]))
-    push!(atoms,Atom(5,"H",[4,0,20]))
-    push!(atoms,Atom(6,"H",[5,0,20]))
+    push!(atoms,Atom(4,"H",[3,0,2]))
+    push!(atoms,Atom(5,"H",[4,0,2]))
+    push!(atoms,Atom(6,"H",[5,0,2]))
     #basis = "6-31g"
     basis = "sto-3g"
 
@@ -136,9 +137,13 @@ end
     e_fci = -3.155304800477
     e_scf = -3.09169726403968
    
-    sol = solve(ints, FCIAnsatz(6,3,3), SolverSettings())
+    sol = solve(ints, FCIAnsatz(6,3,3), SolverSettings(nroots=1, tol=1e-8))
     display(sol)
-   
+    d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(sol) 
+    
+    d1_fci = RDM1(d1a, d1b)
+    d2_fci = RDM2(d2aa, d2ab, d2bb)
+
     clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
     clusters    = [(1:3),(4:6)]
@@ -154,7 +159,7 @@ end
                         verbose=1, sequential=false)
    
     
-    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, k, init_fspace, rdm1) 
+    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, k, init_fspace, rdm1, stepsize=1e-5) 
     g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, k, init_fspace, rdm1) 
     println(" Here is the error:")
     display(norm(g_num-g_anl))
@@ -167,26 +172,33 @@ end
     rdm1 = ssRDM1(d1)
     rdm2 = ssRDM2(d2)
 
+    @test isapprox(norm(d1.a-RDM1(d2).a), 0, atol=1e-8)
+    @test isapprox(norm(d1.b-RDM1(d2).b), 0, atol=1e-8)
+
     println(" These should match")
     display(compute_energy(ints, rdm1, rdm2))
     display(compute_energy(ints, d1, d2))
     display(compute_energy(ints, d1dict, d2dict, clusters))
-    println()
-    return
-    println(" d1 ")
-    display(tr(d1.a))
-    println(" tr(d2)")
-    display(tr(RDM1(d2).a))
-    println(" d1 - tr(d2)")
-    display(d1 - RDM1(d2))
-    display(tr(RDM1(d2).a))
-    display(tr(RDM1(d2).b))
-    display(tr(RDM1(d2dict[2]).a))
-    display(tr(RDM1(d2dict[2]).b))
+    
+    @test isapprox(compute_energy(ints, rdm1, rdm2), compute_energy(ints, d1, d2), atol=1e-12)
+    @test isapprox(compute_energy(ints, rdm1, rdm2), compute_energy(ints, d1dict, d2dict, clusters), atol=1e-12)
+
+#    #g_anl2 = build_orbital_gradient(ints, d1, d2)
+#    @printf(" Shold be FCI: %12.8f\n",compute_energy(ints, d1_fci, d2_fci))
+#    g_anl2 = ClusterMeanField.mybuild_orbital_gradient(ints, d1_fci, d2_fci)
+#    println(" Here is the error:")
+#    display(norm(g_num-g_anl2))
+#    display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
+#    display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
+#    #display(g_num)
+#    #display(g_anl2)
+   
+
     g_anl2 = build_orbital_gradient(ints, d1, d2)
     println(" Here is the error:")
     display(norm(g_num-g_anl2))
-    #@test isapprox(f1[1], -2.97293813654926351, atol=1e-10)
+    display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
+    display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
    
     return
     e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 

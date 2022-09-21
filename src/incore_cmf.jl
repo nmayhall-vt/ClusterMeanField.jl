@@ -173,6 +173,29 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
     return e_curr, rdm1_dict, rdm2_dict
 end
 
+function orbital_rotation!(d2::RDM2{T}, U) where T
+    @tensor begin
+        d[p,q,r,s] := U[t,p] * d2.aa[t,q,r,s]
+        d[p,q,r,s] := U[t,q] * d[p,t,r,s]
+        d[p,q,r,s] := U[t,r] * d[p,q,t,s]
+        d[p,q,r,s] := U[t,s] * d[p,q,r,t]
+    end
+    d2.aa .= d
+    @tensor begin
+        d[p,q,r,s] := U[t,p] * d2.ab[t,q,r,s]
+        d[p,q,r,s] := U[t,q] * d[p,t,r,s]
+        d[p,q,r,s] := U[t,r] * d[p,q,t,s]
+        d[p,q,r,s] := U[t,s] * d[p,q,r,t]
+    end
+    d2.ab .= d
+    @tensor begin
+        d[p,q,r,s] := U[t,p] * d2.bb[t,q,r,s]
+        d[p,q,r,s] := U[t,q] * d[p,t,r,s]
+        d[p,q,r,s] := U[t,r] * d[p,q,t,s]
+        d[p,q,r,s] := U[t,s] * d[p,q,r,t]
+    end
+    d2.bb .= d
+end
 function orbital_rotation!(d2::ssRDM2{T}, U) where T
     @tensor begin
         d[p,q,r,s] := U[t,p] * d2.rdm[t,q,r,s]
@@ -416,7 +439,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
                 grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].aa[q,v,u,w]
                 grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].bb[q,v,u,w]
                 grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[q,v,u,w]
-                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[u,v,q,w]
+                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[u,w,q,v]
                 grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx].a[r,q]+rdm1_dict[ci.idx].b[r,q])
             end
             for cj in clusters
@@ -549,8 +572,7 @@ Return spin summed 1 and 2 RDMs
 """
 function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM1{T}}) where T
     norb = sum([length(i) for i in clusters])
-    rdm1 = zeros(norb,norb)
-    d1 = RDM1(rdm1,rdm1)
+    d1 = RDM1(norb)
 
     for ci in clusters
         d1.a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx].a
@@ -568,11 +590,8 @@ Return full system 1 and 2 RDMs
 function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM1{T}}, rdm2s::Dict{Integer, RDM2{T}}) where T
     norb = sum([length(i) for i in clusters])
 
-    tmp = zeros(T, norb,norb)
-    rdm1 = RDM1(tmp, tmp)
-    
-    tmp = zeros(norb,norb,norb,norb)
-    rdm2 = RDM2(tmp,tmp,tmp)
+    rdm1 = RDM1(norb)
+    rdm2 = RDM2(norb)
     
     for ci in clusters
         rdm1.a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx].a
@@ -720,21 +739,3 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, d::RDM1;
 end
 
 
-function mybuild_orbital_gradient(ints::InCoreInts{T}, d1::RDM1{T}, d2::RDM2{T}; verbose=0) where T
-    verbose == 0 || println(" In build_orbital_gradient")
-
-    N = n_orb(ints)
-    G = zeros(N,N)
-    g = zeros(N*(N-1)÷2)
-
-    G = ints.h1*(d1.a + d1.b)
-    V = ints.h2
-
-    @tensor begin
-        G[s,t] +=  V[p,q,r,s] * d2.aa[p,q,r,t]
-        G[s,t] +=  V[p,q,r,s] * d2.bb[p,q,r,t]
-        G[s,t] +=  V[p,q,r,s] * d2.ab[p,q,r,t]
-        G[s,t] +=  V[p,q,r,s] * d2.ab[r,t,p,q]
-    end
-    return pack_gradient(2*(G-G'),N)
-end

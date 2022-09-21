@@ -8,6 +8,51 @@ using NPZ
 using InCoreIntegrals
 using ActiveSpaceSolvers
 
+function numgrad(ints, d1::RDM1, d2::RDM2)
+
+    @printf(" Energy: %12.8f\n", compute_energy(ints, d1, d2))
+
+    no = n_orb(ints)
+    k = RDM.pack_gradient(zeros(no,no), no)
+    grad = deepcopy(k)
+
+    stepsize=1e-6
+    for i in 1:length(k)
+        ki = deepcopy(k)
+        ki[i] += stepsize
+        Ki = RDM.unpack_gradient(ki, no)
+        U = exp(Ki)
+        intsi = orbital_rotation(ints,U)
+        e1 = compute_energy(intsi, d1, d2)
+        
+        ki = deepcopy(k)
+        ki[i] -= stepsize
+        Ki = RDM.unpack_gradient(ki, no)
+        U = exp(Ki)
+        intsi = orbital_rotation(ints,U)
+        e2 = compute_energy(intsi, d1, d2)
+        
+        grad[i] = (e1-e2)/(2*stepsize)
+    end
+    println(" Numerical Gradient: ")
+    display(norm(grad))
+    #display(grad)
+    
+    println(" Analytical Gradient: ")
+    g = build_orbital_gradient(ints, d1, d2)
+    display(norm(g))
+    @printf("   Error: %12.8f\n",norm(g-grad))
+    #display(g)
+
+    
+    println()
+    g = build_orbital_gradient(ints, ssRDM1(d1), ssRDM2(d2))
+    #display(g)
+    println(" Analytical Gradient: ")
+    display(norm(g))
+    @printf("   Error: %12.8f\n",norm(g-grad))
+    println()
+end
 
 if false 
 #@testset "CMF" begin
@@ -172,6 +217,8 @@ end
     rdm1 = ssRDM1(d1)
     rdm2 = ssRDM2(d2)
 
+    display(d1)
+    display(RDM1(d2))
     @test isapprox(norm(d1.a-RDM1(d2).a), 0, atol=1e-8)
     @test isapprox(norm(d1.b-RDM1(d2).b), 0, atol=1e-8)
 
@@ -197,9 +244,12 @@ end
     g_anl2 = build_orbital_gradient(ints, d1, d2)
     println(" Here is the error:")
     display(norm(g_num-g_anl2))
+   
     display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
     display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
-   
+
+    numgrad(ints, d1, d2)
+
     return
     e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
                               verbose=0, gconv=1e-6, method="cg",sequential=true)
@@ -208,6 +258,5 @@ end
     Ccmf = Cl*U
     ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
   
-    
-
 end
+

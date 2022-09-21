@@ -503,7 +503,7 @@ version = "0.1.0"
 
 [[deps.RDM]]
 deps = ["ActiveSpaceSolvers", "BlockDavidson", "InCoreIntegrals", "JLD2", "LinearAlgebra", "NPZ", "Printf", "QCBase", "Random", "TensorOperations"]
-git-tree-sha1 = "c0a5a73965e154cc5cc0391e19fd78db08769aa6"
+git-tree-sha1 = "918f17a2ba78e274c6a195a38d24f7b8780a6de0"
 repo-rev = "main"
 repo-url = "https://github.com/nmayhall-vt/RDM.jl"
 uuid = "e382014c-6717-46ba-99dc-880f59d7a5e4"

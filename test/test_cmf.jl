@@ -51,10 +51,7 @@ using ActiveSpaceSolvers
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
-    rdm1 = zeros(size(ints.h1))
-    rdm1a = rdm_mf
-    rdm1b = rdm_mf
-    
+    rdm1 = RDM1(rdm_mf, rdm_mf)
 
     e_fci = -3.155304800477
     e_scf = -3.09169726403968
@@ -68,12 +65,12 @@ using ActiveSpaceSolvers
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
-    f1 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
+    f1 = cmf_ci(ints, clusters, init_fspace, rdm1, 
                         verbose=1, sequential=false)
     
     @test isapprox(f1[1], -2.97293813654926351, atol=1e-10)
     
-    e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
+    e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, 
                               verbose=0, gconv=1e-6, method="cg",sequential=true)
     @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
     
@@ -84,7 +81,7 @@ using ActiveSpaceSolvers
 
 end
     
-@testset "CMF open shell" begin
+#@testset "CMF open shell" begin
 # 
     atoms = []
     push!(atoms,Atom(1,"H",[0,0,0]))
@@ -117,41 +114,59 @@ end
     println(" done.")
     flush(stdout)
 
-    clusters    = [(1:2),(3:4),(5:6)]
-    init_fspace = [(1,1),(1,1),(1,1)]
-
-    clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
-    display(clusters)
-
-    rdm1 = zeros(size(ints.h1))
-    rdm1a = rdm_mf
-    rdm1b = rdm_mf
-    
+    rdm1 = RDM1(rdm_mf, rdm_mf)
 
     e_fci = -3.155304800477
     e_scf = -3.09169726403968
    
     sol = solve(ints, FCIAnsatz(6,3,3), SolverSettings())
     display(sol)
-    
+   
+    clusters    = [(1:3),(4:6)]
+    init_fspace = [(2,1),(1,2)]
     clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
 
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
-    f1 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
+    n = n_orb(ints)
+    k = zeros(n*(n-1)÷2)
+    
+    f1 = cmf_ci(ints, clusters, init_fspace, rdm1, 
                         verbose=1, sequential=false)
+   
     
-    @test isapprox(f1[1], -2.97293813654926351, atol=1e-10)
+    g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, k, init_fspace, rdm1) 
+    g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, k, init_fspace, rdm1) 
+    println(" Here is the error:")
+    display(norm(g_num-g_anl))
+   
+    d1dict = f1[2]
+    d2dict = f1[3]
+
+    d1, d2 = ClusterMeanField.assemble_full_rdm(clusters, d1dict, d2dict)
+
+    rdm1 = ssRDM1(d1)
+    rdm2 = ssRDM2(d2)
+
+
+    display(rdm1)
+    display(tr(rdm1.rdm))
+    display(compute_energy(ints, rdm1, rdm2))
+    display(compute_energy(ints, d1, d2))
+    display(compute_energy(ints, d1dict, d2dict, clusters))
+    println(" Here is the error:")
+    display(norm(g_num-g_anl))
+    #@test isapprox(f1[1], -2.97293813654926351, atol=1e-10)
     
-    e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, rdm1, 
+    e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
                               verbose=0, gconv=1e-6, method="cg",sequential=true)
-    @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
+    #@test isapprox(e_cmf, -3.205983033016, atol=1e-10)
     
     Ccmf = Cl*U
     ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
   
     
 
-end
+#end

@@ -19,22 +19,22 @@ function form_1rdm_dressed_ints(ints::InCoreInts, orb_list, rdm1a, rdm1b)
 
 
     for (pi,p) in enumerate(orb_list)
-    	for (qi,q) in enumerate(orb_list)
-	    h[pi,qi] = ints.h1[p,q]
-	    da[pi,qi] = rdm1a[p,q]
-	    db[pi,qi] = rdm1b[p,q]
-	end
+        for (qi,q) in enumerate(orb_list)
+            h[pi,qi] = ints.h1[p,q]
+            da[pi,qi] = rdm1a[p,q]
+            db[pi,qi] = rdm1b[p,q]
+        end
     end
 
 
     for (pi,p) in enumerate(orb_list)
-    	for (qi,q) in enumerate(orb_list)
-    	    for (ri,r) in enumerate(orb_list)
-    		for (si,s) in enumerate(orb_list)
-		    v[pi,qi,ri,si] = ints.h2[p,q,r,s]
-		end
-	    end
-	end
+        for (qi,q) in enumerate(orb_list)
+            for (ri,r) in enumerate(orb_list)
+                for (si,s) in enumerate(orb_list)
+                    v[pi,qi,ri,si] = ints.h2[p,q,r,s]
+                end
+            end
+        end
     end
 
     println(" Compute single particle embedding potential")
@@ -90,7 +90,37 @@ function form_1rdm_dressed_ints(ints::InCoreInts, orb_list, rdm1a, rdm1b)
 end
 
 
-
+"""
+    subset(ints::InCoreInts, list, rmd1a, rdm1b)
+Extract a subset of integrals acting on orbitals in list, returned as `InCoreInts` type
+and contract a 1rdm to give effectve 1 body interaction
+# Arguments
+- `ints::InCoreInts`: Integrals for full system 
+- `list`: list of orbital indices in subset
+- `rdm1a`: 1RDM for embedding α density to make CASCI hamiltonian
+- `rdm1b`: 1RDM for embedding β density to make CASCI hamiltonian
+"""
+function InCoreIntegrals.subset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
+    list = ci.orb_list
+    ints_i = subset(ints, list)
+    da = deepcopy(rdm1.a)
+    db = deepcopy(rdm1.b)
+    da[:,list] .= 0
+    db[:,list] .= 0
+    da[list,:] .= 0
+    db[list,:] .= 0
+    viirs = ints.h2[list, list,:,:]
+    viqri = ints.h2[list, :, :, list]
+    f = zeros(length(list),length(list))
+    @tensor begin
+        f[p,q] += viirs[p,q,r,s] * (da+db)[r,s]
+        f[p,s] -= .5*viqri[p,q,r,s] * da[q,r]
+        f[p,s] -= .5*viqri[p,q,r,s] * db[q,r]
+    end
+    ints_i.h1 .+= f
+    h0 = compute_energy(ints, RDM1(da,db))
+    return InCoreInts(h0, ints_i.h1, ints_i.h2) 
+end
 
 
 """
@@ -107,26 +137,14 @@ This method uses the full system integrals.
 
 return the total CMF energy
 """
-function compute_cmf_energy(ints, rdm1s, rdm2s, clusters; verbose=0)
+function QCBase.compute_energy(ints::InCoreInts{T}, rdm1s::Dict{Integer,RDM1{T}}, rdm2s::Dict{Integer,RDM2{T}}, clusters::Vector{MOCluster}; verbose=0) where T
     e1 = zeros((length(clusters),1))
     e2 = zeros((length(clusters),length(clusters)))
     for ci in clusters
+        noi = n_orb(ints)
         ints_i = subset(ints, ci.orb_list)
-        # ints_i = ints
-        # display(rdm1s)
-        # h_pq   = ints.h1[ci.orb_list, ci.orb_list]
-        #
-        # v_pqrs = ints.h2[ci.orb_list,ci.orb_list,ci.orb_list,ci.orb_list]
-        # # println(ints_i.h2 - v_pqrs)
-        # # return
-        # tmp = 0
-        # @tensor begin
-        # 	tmp += h_pq[p,q] * rdm1s[ci.idx][q,p]
-        # 	tmp += .5 * v_pqrs[p,q,r,s] * rdm2s[ci.idx][p,q,r,s]
-        # end
-        e1[ci.idx] = compute_energy(0, ints_i.h1, ints_i.h2, rdm1s[ci.idx][1]+rdm1s[ci.idx][2], rdm2s[ci.idx])
 
-        # e1[ci.idx] = tmp
+        e1[ci.idx] = compute_energy(ints_i, rdm1s[ci.idx], rdm2s[ci.idx])
     end
     for ci in clusters
         for cj in clusters
@@ -135,24 +153,19 @@ function compute_cmf_energy(ints, rdm1s, rdm2s, clusters; verbose=0)
             end
             v_pqrs = ints.h2[ci.orb_list, ci.orb_list, cj.orb_list, cj.orb_list]
             v_psrq = ints.h2[ci.orb_list, cj.orb_list, cj.orb_list, ci.orb_list]
-            # v_pqrs = ints.h2[ci.orb_list, ci.orb_list, cj.orb_list, cj.orb_list]
             tmp = 0
 
-            #@tensor begin
-            #    tmp  = v_pqrs[p,q,r,s] * rdm1s[ci.idx][p,q] * rdm1s[cj.idx][r,s]
-            #    tmp -= .5*v_psrq[p,s,r,q] * rdm1s[ci.idx][p,q] * rdm1s[cj.idx][r,s]
-            #end
 
             @tensor begin
-                tmp  = v_pqrs[p,q,r,s] * rdm1s[ci.idx][1][p,q] * rdm1s[cj.idx][1][r,s]
-                tmp -= v_psrq[p,s,r,q] * rdm1s[ci.idx][1][p,q] * rdm1s[cj.idx][1][r,s]
+                tmp  = v_pqrs[p,q,r,s] * rdm1s[ci.idx].a[p,q] * rdm1s[cj.idx].a[r,s]
+                tmp -= v_psrq[p,s,r,q] * rdm1s[ci.idx].a[p,q] * rdm1s[cj.idx].a[r,s]
 
-                tmp += v_pqrs[p,q,r,s] * rdm1s[ci.idx][2][p,q] * rdm1s[cj.idx][2][r,s]
-                tmp -= v_psrq[p,s,r,q] * rdm1s[ci.idx][2][p,q] * rdm1s[cj.idx][2][r,s]
+                tmp += v_pqrs[p,q,r,s] * rdm1s[ci.idx].b[p,q] * rdm1s[cj.idx].b[r,s]
+                tmp -= v_psrq[p,s,r,q] * rdm1s[ci.idx].b[p,q] * rdm1s[cj.idx].b[r,s]
 
-                tmp += v_pqrs[p,q,r,s] * rdm1s[ci.idx][1][p,q] * rdm1s[cj.idx][2][r,s]
+                tmp += v_pqrs[p,q,r,s] * rdm1s[ci.idx].a[p,q] * rdm1s[cj.idx].b[r,s]
 
-                tmp += v_pqrs[p,q,r,s] * rdm1s[ci.idx][2][p,q] * rdm1s[cj.idx][1][r,s]
+                tmp += v_pqrs[p,q,r,s] * rdm1s[ci.idx].b[p,q] * rdm1s[cj.idx].a[r,s]
             end
 
 
@@ -173,111 +186,76 @@ end
 
 Perform single CMF-CI iteration, returning new energy, and density
 """
-function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{MOCluster}, rdm1a, rdm1b, fspace; verbose=1,sequential=false)
-    rdm1_dict = Dict{Integer,Array}()
-    rdm1s_dict = Dict{Integer,Array}()
-    rdm2_dict = Dict{Integer,Array}()
+function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; verbose=1,sequential=false) where T
+    rdm1 = deepcopy(in_rdm1)
+    rdm1_dict = Dict{Integer,RDM1{T}}()
+    rdm2_dict = Dict{Integer,RDM2{T}}()
     for ci in clusters
         flush(stdout)
 
         ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
         verbose < 2 || display(ansatz)
-        ints_i = subset(ints, ci.orb_list, rdm1a, rdm1b)
-        #ints_i = form_casci_ints(ints, ci, rdm1a, rdm1b)
+        ints_i = subset(ints, ci, rdm1)
+
+        d1a = rdm1.a[ci.orb_list, ci.orb_list]
+        d1b = rdm1.b[ci.orb_list, ci.orb_list]
+
+        na = fspace[ci.idx][1]
+        nb = fspace[ci.idx][2]
 
         no = length(ci)
         e = 0.0
-        d1 = zeros(no, no)
-        d1a =zeros(no,no)
-        d1b =zeros(no,no)
-        d2 = zeros(no, no, no, no)
         if ansatz.dim == 1
 
             #
-            # we have a slater determinant. Compute energy and dms
+            # doubly occupied space
+            d1 = RDM1(d1a, d1b)
+            d2 = build_2rdm(d1)
+            e = compute_energy(ints_i, d1)
+            verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
+            
+            d1 = RDM1(d1a, d1b)
+            d2 = RDM2(d2aa, d2ab, d2bb)
 
-            na = fspace[ci.idx][1]
-            nb = fspace[ci.idx][2]
-
-            if (na == no) && (nb == no)
-                #
-                # a doubly occupied space
-                d1 = Matrix(1.0I, no, no)
-                for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                    d2[p,q,r,s] = 2*d1[p,q]*d1[r,s] - d1[p,s]*d1[r,q]
-                end
-                d1a = d1 
-                d1b = d1 
-                d2 *= 2.0
-                e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
-
-            elseif (na == no) && (nb == 0)
-                #
-                # singly occupied space
-                d1 = Matrix(1.0I, no, no)
-                for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                    d2[p,q,r,s] = d1[p,q]*d1[r,s] - d1[p,s]*d1[r,q]
-                end
-                d1a  = d1
-                d1b  = zeros(no,no)
-                e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
-
-            elseif (na == 0) && (nb == no)
-                #
-                # singly occupied space
-                d1 = Matrix(1.0I, no, no)
-                for p in 1:no, q in 1:no, r in 1:no, s in 1:no
-                    d2[p,q,r,s] = d1[p,q]*d1[r,s] - d1[p,s]*d1[r,q]
-                end
-                d1a  = zeros(no,no)
-                d1b  = d1
-                e = compute_energy(0, ints_i.h1, ints_i.h2, d1, d2)
-                verbose == 0 || @printf(" Slater Det Energy: %12.8f\n", e)
-
-            elseif (na == 0) && (nb==0)
-                # 
-                # a virtual space (do nothing)
-            else
-                error(" How can this be?")
-            end
-            #e, d1, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
         else
             #
             # run PYSCF FCI
-            e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+            #e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
             
-            #solver = SolverSettings(verbose=1)
-            #solution = solve(ints_i, ansatz, solver)
-            #d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
+            solver = SolverSettings(verbose=1)
+            solution = solve(ints_i, ansatz, solver)
+            d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
+            
+            d1 = RDM1(d1a, d1b)
+            d2 = RDM2(d2aa, d2ab, d2bb)
 
-            #norb = n_orb(ints_i)
-            #d2 = (d2aa .+ d2bb .+ 2*d2ab)
         end
 
-        rdm1_dict[ci.idx] = [d1a,d1b]
-        rdm1s_dict[ci.idx] = d1a+d1b
+        rdm1_dict[ci.idx] = d1
         rdm2_dict[ci.idx] = d2
-        #display(d1a-d1b)
 
         if sequential==true
-            rdm1a[ci.orb_list,ci.orb_list] = d1a
-            rdm1b[ci.orb_list,ci.orb_list] = d1b
+            rdm1.a[ci.orb_list,ci.orb_list] = d1.a
+            rdm1.b[ci.orb_list,ci.orb_list] = d1.b
         end
     end
-    e_curr = compute_cmf_energy(ints, rdm1_dict, rdm2_dict, clusters, verbose=verbose)
+    e_curr = compute_energy(ints, rdm1_dict, rdm2_dict, clusters, verbose=verbose)
+    
     if verbose > 1
         @printf(" CMF-CI Curr: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
     end
 
-    rdm1a_out = zeros(size(rdm1a))
-    rdm1b_out = zeros(size(rdm1b))
-    for ci in clusters
-        rdm1a_out[ci.orb_list, ci.orb_list] .= rdm1_dict[ci.idx][1]
-        rdm1b_out[ci.orb_list, ci.orb_list] .= rdm1_dict[ci.idx][2]
-    end
-    return e_curr,rdm1a_out, rdm1b_out, rdm1_dict, rdm2_dict
+    return e_curr, rdm1_dict, rdm2_dict
+end
+
+function orbital_rotation!(d::RDM1{T}, U) where T
+    d.a .= U'*d.a*U
+    d.b .= U'*d.b*U
+end
+function InCoreIntegrals.orbital_rotation(d::RDM1{T}, U) where T
+    d2 = deepcopy(d)
+    orbital_rotation!(d2,U)
+    return d2
 end
 
 
@@ -298,10 +276,9 @@ Optimize the 1RDM for CMF-CI
 - `sequential`: Use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
 """
-function cmf_ci(ints, clusters, fspace, in_rdm1a, in_rdm1b; 
+function cmf_ci(ints, clusters, fspace, in_rdm1::RDM1; 
                 max_iter=10, dconv=1e-6, econv=1e-10, verbose=1,sequential=false)
-    rdm1a = deepcopy(in_rdm1a)
-    rdm1b = deepcopy(in_rdm1b)
+    rdm1 = deepcopy(in_rdm1)
     energies = []
     e_prev = 0
 
@@ -317,17 +294,18 @@ function cmf_ci(ints, clusters, fspace, in_rdm1a, in_rdm1b;
             println(" CMF CI Iter: ", iter)
             println(" ------------------------------------------ ")
         end
-        e_curr, rdm1a_curr, rdm1b_curr, rdm1_dict, rdm2_dict = cmf_ci_iteration(ints, clusters, rdm1a, rdm1b, fspace, verbose=verbose,sequential=sequential)
+        e_curr, rdm1_dict, rdm2_dict = cmf_ci_iteration(ints, clusters, rdm1, fspace, verbose=verbose,sequential=sequential)
+        rdm1_curr = assemble_full_rdm(clusters, rdm1_dict)
+
         append!(energies,e_curr)
-        error = (rdm1a_curr+rdm1b_curr) - (rdm1a+rdm1b)
+        error = (rdm1_curr.a+rdm1_curr.b) - (rdm1.a+rdm1.b)
         d_err = norm(error)
         e_err = e_curr-e_prev
         if verbose>1
             @printf(" CMF-CI Energy: %12.8f | Change: RDM: %6.1e Energy %6.1e\n\n", e_curr, d_err, e_err)
         end
         e_prev = e_curr*1
-        rdm1a = rdm1a_curr
-        rdm1b = rdm1b_curr
+        rdm1 = rdm1_curr
         if (abs(d_err) < dconv) && (abs(e_err) < econv)
             if verbose>1
                 @printf("*CMF-CI: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
@@ -341,7 +319,7 @@ function cmf_ci(ints, clusters, fspace, in_rdm1a, in_rdm1b;
             @printf(" Elec: %12.8f Total: %12.8f\n", i-ints.h0, i)
         end
     end
-    return e_prev, rdm1a, rdm1b, rdm1_dict, rdm2_dict
+    return e_prev, rdm1_dict, rdm2_dict
 end
 
 
@@ -363,8 +341,7 @@ Do CMF with orbital optimization
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
-- `dguess_a`: initial guess for 1particle density matrix for alpha electrons
-- `dguess_b`: initial guess for 1particle density matrix for beta electrons
+- `dguess_a`: initial guess for 1particle density matrix
 - `max_iter_oo`: Max iter for the orbital optimization iterations 
 - `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
 - `gconv`: Convergence threshold for change in gradient of energy 
@@ -372,7 +349,7 @@ Do CMF with orbital optimization
 - `verbose`: Printing level 
 - `method`: optimization method
 """
-function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a, dguess_b; 
+function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::RDM1; 
                 max_iter_oo=100, 
                 max_iter_ci=100, 
                 gconv=1e-6, 
@@ -409,14 +386,18 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a,
     e_err = 0
     #da = zeros(size(ints.h1))
     #db = zeros(size(ints.h1))
-    da = deepcopy(dguess_a)
-    db = deepcopy(dguess_b)
+    d = deepcopy(dguess)
+    d1 = deepcopy(dguess)
+    d2 = deepcopy(dguess)
+    
+    da = deepcopy(dguess.a)
+    db = deepcopy(dguess.b)
 
-    da1 = deepcopy(dguess_a)
-    db1 = deepcopy(dguess_b)
+    da1 = deepcopy(dguess.a)
+    db1 = deepcopy(dguess.b)
 
-    da2 = deepcopy(dguess_a)
-    db2 = deepcopy(dguess_b)
+    da2 = deepcopy(dguess.a)
+    db2 = deepcopy(dguess.b)
 
     iter = 0
     kappa = zeros(norb*(norb-1)÷2)
@@ -429,11 +410,9 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a,
         K = unpack_gradient(k, norb)
         U = exp(K)
         ints2 = orbital_rotation(ints,U)
-        da1 = U'*da*U
-        db1 = U'*db*U
-        e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=gconv/10.0, verbose=0,sequential=sequential)
-        da2 = U*da1*U'
-        db2 = U*db1*U'
+        d1  = orbital_rotation(d,U)
+        e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, dconv=gconv/10.0, verbose=0,sequential=sequential)
+        d2  = orbital_rotation(d1,U')
         e_err = e-e_curr
         e_curr = e
         return e
@@ -472,20 +451,20 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a,
         U = exp(K)
         #println(size(U), size(kappa))
         ints2 = orbital_rotation(ints,U)
-        da1 = U'*da*U
-        db1 = U'*db*U
+        d1 = orbital_rotation(d,U)
         
-        e, gd1a, gd1b, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=gconv/10.0, verbose=verbose)
+        e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, dconv=gconv/10.0, verbose=verbose)
         grad = zeros(size(ints2.h1))
         for ci in clusters
             grad_1 = grad[:,ci.orb_list]
             h_1	   = ints2.h1[:,ci.orb_list]
             v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
             @tensor begin
-                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,v,u,w]
-                #grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,u,w,v]
-                #grad_1[p,q] += h_1[p,r] * rdm1_dict[ci.idx][r,q]
-                grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx][1][r,q]+rdm1_dict[ci.idx][2][r,q])
+                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].aa[q,v,u,w]
+                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].bb[q,v,u,w]
+                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[q,v,u,w]
+                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[u,v,q,w]
+                grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx].a[r,q]+rdm1_dict[ci.idx].b[r,q])
             end
             for cj in clusters
                 if ci.idx == cj.idx
@@ -493,13 +472,13 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a,
                 end
                 v_212 = ints2.h2[:,cj.orb_list, ci.orb_list, cj.orb_list]
                 v_122 = ints2.h2[:,ci.orb_list, cj.orb_list, cj.orb_list]
-                d1 = rdm1_dict[ci.idx][1] + rdm1_dict[ci.idx][2]
-                d2 = rdm1_dict[cj.idx][1] + rdm1_dict[cj.idx][2]
+                d1 = rdm1_dict[ci.idx].a + rdm1_dict[ci.idx].b
+                d2 = rdm1_dict[cj.idx].a + rdm1_dict[cj.idx].b
                 
-                d1a = rdm1_dict[ci.idx][1]
-                d1b = rdm1_dict[ci.idx][2]
-                d2a = rdm1_dict[cj.idx][1]
-                d2b = rdm1_dict[cj.idx][2]
+                d1a = rdm1_dict[ci.idx].a
+                d1b = rdm1_dict[ci.idx].b
+                d2a = rdm1_dict[cj.idx].a
+                d2b = rdm1_dict[cj.idx].b
 
                 @tensor begin
                     #grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
@@ -611,65 +590,53 @@ end
 
 
 """
-    assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+    assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM1{T}}) where T
 
 Return spin summed 1 and 2 RDMs
 """
-function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM1{T}}) where T
     norb = sum([length(i) for i in clusters])
-    @printf(" Norbs: %i\n",norb)
+    #@printf(" Norbs: %i\n",norb)
     rdm1 = zeros(norb,norb)
-    for ci in clusters
-        rdm1[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][1] .+ rdm1s[ci.idx][2]
-    end
-    
-    rdm2 = zeros(norb,norb,norb,norb)
-    @tensor begin
-        rdm2[p,q,r,s] += rdm1[p,q] * rdm1[r,s]
-        rdm2[p,q,r,s] -= .5*rdm1[p,s] * rdm1[r,q]
-    end
+    d1 = RDM1{T}(rdm1,rdm1)
 
     for ci in clusters
-        rdm2[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx]
+        d1.a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx].a
+        d1.b[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx].b
+    end
+    
+    return d1
+end
+
+"""
+    assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+
+Return full system 1 and 2 RDMs
+"""
+function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM1{T}}, rdm2s::Dict{Integer, RDM2{T}}) where T
+    norb = sum([length(i) for i in clusters])
+
+    tmp = zeros(norb,norb)
+    rdm1 = RDM1{T}(tmp, tmp)
+    
+    tmp = zeros(norb,norb,norb,norb)
+    rdm2 = RDM2{T}(tmp,tmp,tmp)
+    
+    for ci in clusters
+        rdm1.a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx].a
+        rdm1.b[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx].b
+    end
+   
+    rdm2 = RDM2(rdm1)
+
+    for ci in clusters
+        rdm2.aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx].aa
+        rdm2.ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx].ab
+        rdm2.bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx].bb
     end
     return rdm1, rdm2
 end
 
-"""
-    assemble_full_rdms(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
-
-Return 1 and 2 RDMs
-"""
-function assemble_full_rdms(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
-    norb = sum([length(i) for i in clusters])
-    @printf(" Norbs: %i\n",norb)
-    rdm1a = zeros(norb,norb)
-    rdm1b = zeros(norb,norb)
-    for ci in clusters
-        rdm1a[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][1] 
-        rdm1b[ci.orb_list, ci.orb_list] .= rdm1s[ci.idx][2] 
-    end
-    
-    rdm2aa = zeros(norb,norb,norb,norb)
-    rdm2bb = zeros(norb,norb,norb,norb)
-    rdm2ab = zeros(norb,norb,norb,norb)
-    @tensor begin
-        rdm2aa[p,q,r,s] += rdm1a[p,q] * rdm1a[r,s]
-        rdm2aa[p,q,r,s] -= rdm1a[p,s] * rdm1a[r,q]
-
-        rdm2bb[p,q,r,s] += rdm1b[p,q] * rdm1b[r,s]
-        rdm2bb[p,q,r,s] -= rdm1b[p,s] * rdm1b[r,q]
-
-        rdm2ab[p,q,r,s] += rdm1a[p,q] * rdm1b[r,s]
-    end
-
-    for ci in clusters
-        rdm2aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][1]
-        rdm2bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][2]
-        rdm2ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] .= rdm2s[ci.idx][3]
-    end
-    return (rdm1a, rdm1b), (rdm2aa, rdm2bb, rdm2ab)
-end
 
 
 """
@@ -684,7 +651,7 @@ w_{pq} = 2(f_{pq} - f_{qp})
 f_{pq} = h_{pr}P_{rq} + 2 <rs||tp> G_{pstq}
 ```
 """
-function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
+function orbital_gradient_analytical(ints, clusters, kappa, fspace, rdm::RDM1;
                                     ci_conv = 1e-8,
                                     verbose = 0)
 #={{{=#
@@ -695,22 +662,20 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
     #display("nick U")
     #display(U)
     ints2 = orbital_rotation(ints,U)
-    da1 = U'*da*U
-    db1 = U'*db*U
+    d1 = orbital_rotation(rdm,U)
 
-    e, gd1a, gd1b, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, dconv=ci_conv, verbose=verbose)
-    #println("anl")
-    #display(e)
+    e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, dconv=ci_conv, verbose=verbose)
     grad = zeros(size(ints2.h1))
     for ci in clusters
         grad_1 = grad[:,ci.orb_list]
         h_1	   = ints2.h1[:,ci.orb_list]
         v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
         @tensor begin
-            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx][q,v,u,w]
-            #grad_1[p,q] +=.5* v_111[p,v,u,w] * rdm2_dict[ci.idx][q,u,w,v]
-            #grad_1[p,q] += h_1[p,r] * rdm1_dict[ci.idx][r,q]
-            grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx][1][r,q]+rdm1_dict[ci.idx][2][r,q])
+            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].aa[q,v,u,w]
+            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].bb[q,v,u,w]
+            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[q,v,u,w]
+            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[u,v,q,w]
+            grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx].a[r,q]+rdm1_dict[ci.idx].b[r,q])
         end
         for cj in clusters
             if ci.idx == cj.idx
@@ -718,13 +683,13 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
             end
             v_212 = ints2.h2[:,cj.orb_list, ci.orb_list, cj.orb_list]
             v_122 = ints2.h2[:,ci.orb_list, cj.orb_list, cj.orb_list]
-            d1 = rdm1_dict[ci.idx][1] + rdm1_dict[ci.idx][2]
-            d2 = rdm1_dict[cj.idx][1] + rdm1_dict[cj.idx][2]
+            d1 = rdm1_dict[ci.idx].a + rdm1_dict[ci.idx].b
+            d2 = rdm1_dict[cj.idx].a + rdm1_dict[cj.idx].b
 
-            d1a = rdm1_dict[ci.idx][1]
-            d1b = rdm1_dict[ci.idx][2]
-            d2a = rdm1_dict[cj.idx][1]
-            d2b = rdm1_dict[cj.idx][2]
+            d1a = rdm1_dict[ci.idx].a
+            d1b = rdm1_dict[ci.idx].b
+            d2a = rdm1_dict[cj.idx].a
+            d2b = rdm1_dict[cj.idx].b
 
             @tensor begin
                 #grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
@@ -734,9 +699,9 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
                 grad_1[p,q] -= v_212[p,v,u,w] * d1b[q,u] * d2b[w,v]
             end
         end
-        grad[:,ci.orb_list] .= grad_1
+        grad[:,ci.orb_list] .= -2*grad_1
     end
-    grad .= 2 .* (grad .- grad')
+    grad .= grad .- grad'
     #grad = U*grad*U'
     gout = pack_gradient(grad, norb)
     return gout
@@ -750,7 +715,7 @@ end
                                     verbose     = 1)
 Objective function to minimize in OO-CMF
 """
-function orbital_objective_function(ints, clusters, kappa, fspace, da, db; 
+function orbital_objective_function(ints, clusters, kappa, fspace, rdm::RDM1; 
                                     ci_conv     = 1e-9,
                                     sequential  = false,
                                     verbose     = 0)
@@ -765,15 +730,11 @@ function orbital_objective_function(ints, clusters, kappa, fspace, da, db;
     #display("nick K")
     #display(K)
     ints2 = orbital_rotation(ints,U)
-    da1 = U'*da*U
-    db1 = U'*db*U
-    #davg = U'*davg*U
-    #e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, davg, davg, dconv=ci_dconv, verbose=0,sequential=sequential)
-    e, da1, db1, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, da1, db1, 
+    d1 = orbital_rotation(rdm,U)
+    e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, 
         dconv=ci_conv, 
         verbose=verbose,
         sequential=sequential)
-    #display(e)
     return e
 end
 
@@ -784,7 +745,7 @@ end
                                     stepsize = 1e-6)
 Compute orbital gradient with finite difference
 """
-function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db; 
+function orbital_gradient_numerical(ints, clusters, kappa, fspace, d::RDM1; 
                                     ci_conv = 1e-10, 
                                     verbose = 0,
                                     stepsize = 1e-6)
@@ -795,11 +756,11 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db;
     
         k1 = deepcopy(kappa)
         k1[ii] += stepsize
-        e1 = orbital_objective_function(ints, clusters, k1, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
+        e1 = orbital_objective_function(ints, clusters, k1, fspace, d, ci_conv=ci_conv, verbose=verbose) 
         
         k2 = deepcopy(kappa)
         k2[ii] -= stepsize
-        e2 = orbital_objective_function(ints, clusters, k2, fspace, da, db, ci_conv=ci_conv, verbose=verbose) 
+        e2 = orbital_objective_function(ints, clusters, k2, fspace, d, ci_conv=ci_conv, verbose=verbose) 
         
         grad[ii] = (e1-e2)/(2*stepsize)
         #println(e1)

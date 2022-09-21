@@ -7,7 +7,7 @@
 1. Download
 
 	```bash
-	git clone https://github.com/nmayhall-vt/ClusterMeanField.git
+	git clone git@github.com:nmayhall-vt/ClusterMeanField.jl.git
 	cd ClusterMeanField.jl/
 	```
 

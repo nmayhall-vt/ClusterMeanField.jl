@@ -1,5 +1,8 @@
 module ClusterMeanField
 
+using QCBase
+using RDM
+
 using LinearAlgebra
 using Random
 using Optim
@@ -8,9 +11,6 @@ using InCoreIntegrals
 using Printf
 using ActiveSpaceSolvers
 
-export Atom
-export Molecule
-export Cluster
 export form_1rdm_dressed_ints
 export cmf_ci
 export cmf_oo
@@ -27,17 +27,11 @@ export get_nuclear_rep
 export localize
 export get_ovlp
 
-include("type_Atom.jl")
-include("type_Molecule.jl")
-include("type_Cluster.jl")
-include("type_RDM.jl")
+#Base.convert(::Type{Vector{MOCluster}}, in::Vector{MOCluster{N}}) where {N} = return Vector{MOCluster}(in)
+
+
 include("PyscfFunctions.jl")
 include("incore_cmf.jl")
 include("direct_cmf.jl")
-include("newton.jl")
 
-export RDM1
-export RDM2
-export ssRDM1
-export ssRDM2
 end

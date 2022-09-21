@@ -3,7 +3,7 @@ using ClusterMeanField
 """
 	form_1rdm_dressed_ints(ints::InCoreInts, orb_list, rdm1a, rdm1b)
 
-Obtain a subset of integrals which act on the orbitals in Cluster,
+Obtain a subset of integrals which act on the orbitals in MOCluster,
 embedding the 1rdm from the rest of the system
 
 Returns an `InCoreInts` type
@@ -103,7 +103,7 @@ This method uses the full system integrals.
 - `ints::InCoreInts`: integrals for full system
 - `rdm1s`: dictionary (`ci.idx => Array`) of 1rdms from each cluster (spin summed)
 - `rdm2s`: dictionary (`ci.idx => Array`) of 2rdms from each cluster (spin summed)
-- `clusters::Vector{Cluster}`: vector of cluster objects
+- `clusters::Vector{MOCluster}`: vector of cluster objects
 
 return the total CMF energy
 """
@@ -161,7 +161,7 @@ function compute_cmf_energy(ints, rdm1s, rdm2s, clusters; verbose=0)
     end
     if verbose>1
         for ei = 1:length(e1)
-            @printf(" Cluster %3i E =%12.8f\n",ei,e1[ei])
+            @printf(" MOCluster %3i E =%12.8f\n",ei,e1[ei])
         end
     end
     return ints.h0 + sum(e1) + sum(e2)
@@ -169,11 +169,11 @@ end
 
 
 """
-    cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rdm1b, fspace; verbose=1)
+    cmf_ci_iteration(ints::InCoreInts, clusters::Vector{MOCluster}, rdm1a, rdm1b, fspace; verbose=1)
 
 Perform single CMF-CI iteration, returning new energy, and density
 """
-function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{Cluster}, rdm1a, rdm1b, fspace; verbose=1,sequential=false)
+function cmf_ci_iteration(ints::InCoreInts, clusters::Vector{MOCluster}, rdm1a, rdm1b, fspace; verbose=1,sequential=false)
     rdm1_dict = Dict{Integer,Array}()
     rdm1s_dict = Dict{Integer,Array}()
     rdm2_dict = Dict{Integer,Array}()
@@ -289,7 +289,7 @@ Optimize the 1RDM for CMF-CI
 
 #Arguments
 - `ints::InCoreInts`: integrals for full system
-- `clusters::Vector{Cluster}`: vector of cluster objects
+- `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
 - `in_rdm1a`: initial guess for 1particle density matrix for alpha electrons
 - `in_rdm1b`: initial guess for 1particle density matrix for beta electrons
@@ -354,14 +354,14 @@ end
 
 
 """
-    cmf_oo(ints::InCoreInts, clusters::Vector{Cluster}, fspace, dguess_a, dguess_b; 
+    cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a, dguess_b; 
                 max_iter_oo=100, max_iter_ci=100, gconv=1e-6, verbose=0, method="bfgs", alpha=nothing,sequential=false)
 
 Do CMF with orbital optimization
 
 #Arguments
 - `ints::InCoreInts`: integrals for full system
-- `clusters::Vector{Cluster}`: vector of cluster objects
+- `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
 - `dguess_a`: initial guess for 1particle density matrix for alpha electrons
 - `dguess_b`: initial guess for 1particle density matrix for beta electrons
@@ -372,7 +372,7 @@ Do CMF with orbital optimization
 - `verbose`: Printing level 
 - `method`: optimization method
 """
-function cmf_oo(ints::InCoreInts, clusters::Vector{Cluster}, fspace, dguess_a, dguess_b; 
+function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a, dguess_b; 
                 max_iter_oo=100, 
                 max_iter_ci=100, 
                 gconv=1e-6, 
@@ -611,11 +611,11 @@ end
 
 
 """
-    assemble_full_rdm(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+    assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
 
 Return spin summed 1 and 2 RDMs
 """
-function assemble_full_rdm(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
     norb = sum([length(i) for i in clusters])
     @printf(" Norbs: %i\n",norb)
     rdm1 = zeros(norb,norb)
@@ -636,11 +636,11 @@ function assemble_full_rdm(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array
 end
 
 """
-    assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+    assemble_full_rdms(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
 
 Return 1 and 2 RDMs
 """
-function assemble_full_rdms(clusters::Vector{Cluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
+function assemble_full_rdms(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, Array}, rdm2s::Dict{Integer, Array})
     norb = sum([length(i) for i in clusters])
     @printf(" Norbs: %i\n",norb)
     rdm1a = zeros(norb,norb)

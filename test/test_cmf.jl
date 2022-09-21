@@ -1,3 +1,5 @@
+using QCBase  
+using RDM  
 using ClusterMeanField  
 using LinearAlgebra
 using Printf
@@ -46,7 +48,7 @@ using ActiveSpaceSolvers
     clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
 
-    clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
+    clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
     rdm1 = zeros(size(ints.h1))
@@ -63,7 +65,7 @@ using ActiveSpaceSolvers
     clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
 
-    clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
+    clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
     f1 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 
@@ -118,7 +120,7 @@ end
     clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
 
-    clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
+    clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
     rdm1 = zeros(size(ints.h1))
@@ -135,7 +137,7 @@ end
     clusters    = [(1:2),(3:4),(5:6)]
     init_fspace = [(1,1),(1,1),(1,1)]
 
-    clusters = [Cluster(i,collect(clusters[i])) for i = 1:length(clusters)]
+    clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
 
     f1 = cmf_ci(ints, clusters, init_fspace, rdm1a, rdm1b, 

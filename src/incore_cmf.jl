@@ -17,8 +17,6 @@ function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
     nofull = n_orb(ints)
     da = deepcopy(rdm1.a)
     db = deepcopy(rdm1.b)
-    da[list,list] .= 0
-    db[list,list] .= 0
     da[:,list] .= 0
     db[:,list] .= 0
     da[list,:] .= 0
@@ -82,8 +80,14 @@ function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
     #display(da)
     #display(db)
     ints_i.h1 .+= f
+    #@printf(" energy?: %12.8f\n", compute_energy(ints, rdm1))
+    #@printf(" energy?: %12.8f\n", compute_energy(ints, rdm1))
     #h0 = compute_energy(ints, RDM1(da,db))
-    return InCoreInts(0.0, ints_i.h1, ints_i.h2) 
+    #h1 = compute_energy(ints_i, RDM1(rdm1.a[list,list], rdm1.b[list,list]))
+    #@printf(" energy?: %12.8f\n", h0 + tr(ints_i.h1*(rdm1.a[list, list] + rdm1.b[list, list] )))
+    #@printf(" energy?: %12.8f\n", h0 + h1 )
+
+    return InCoreInts(.0, ints_i.h1, ints_i.h2) 
 end
 
 
@@ -199,7 +203,8 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             solver = SolverSettings(verbose=1)
             solution = solve(ints_i, ansatz, solver)
             d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
-           
+        
+            #display(solution)
             #display(solution.vectors)
             d1 = RDM1(d1a, d1b)
             d2 = RDM2(d2aa, d2ab, d2bb)

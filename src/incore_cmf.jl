@@ -2,8 +2,6 @@ using ClusterMeanField
 
 
 
-
-
 """
     QCBase.compute_energy(ints::InCoreInts{T}, rdm1s::Dict{Integer,RDM1{T}}, rdm2s::Dict{Integer,RDM2{T}}, clusters::Vector{MOCluster}; verbose=0) where T
 
@@ -78,7 +76,8 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
         ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
         verbose < 2 || display(ansatz)
         ints_i = subset(ints, ci, rdm1)
-        
+
+        #display(tmp.h1 - ints_i.h1)
         d1a = rdm1.a[ci.orb_list, ci.orb_list]
         d1b = rdm1.b[ci.orb_list, ci.orb_list]
 
@@ -91,7 +90,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
         d2 = RDM2(no)
 
         e = 0.0
-        if ansatz.dim == 1
+        if ansatz.dim == -1
        
             da = zeros(T, no, no)
             db = zeros(T, no, no)

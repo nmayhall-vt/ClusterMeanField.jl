@@ -60,8 +60,8 @@ function numgrad(ints, d1::RDM1, d2::RDM2)
     #error("here")
 end
 
-#if false 
-@testset "CMF" begin
+if false 
+#@testset "CMF" begin
     #h0 = npzread("h6_sto3g/h0.npy")
     #h1 = npzread("h6_sto3g/h1.npy")
     #h2 = npzread("h6_sto3g/h2.npy")
@@ -133,7 +133,7 @@ end
 
 end
     
-@testset "CMF open shell" begin
+#@testset "CMF open shell" begin
  
     atoms = []
     push!(atoms,Atom(1,"H",[0,0,0]))
@@ -199,6 +199,8 @@ end
     init_fspace = [(1,1),(1,1),(1,1)]
     clusters    = [(1:3),(4:6)]
     init_fspace = [(2,1),(1,2)]
+    clusters    = [(1:3),(4:6)]
+    init_fspace = [(2,1),(2,1)]
 
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
@@ -261,12 +263,12 @@ end
     numgrad(ints, d1, d2)
 
     return
-    e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
-                              verbose=0, gconv=1e-6, method="gd",sequential=true)
-    @test isapprox(e_cmf, -3.050480022999, atol=1e-10)
+    #e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
+    #                          verbose=0, gconv=1e-6, method="gd",sequential=true)
+    #@test isapprox(e_cmf, -3.050480022999, atol=1e-10)
     
     #Ccmf = Cl*U
     #ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
   
-end
+#end
 

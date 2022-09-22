@@ -10,22 +10,23 @@ using ActiveSpaceSolvers
 
 function numgrad(ints, d1::RDM1, d2::RDM2)
 
+
     @printf(" Energy: %12.8f\n", compute_energy(ints, d1, d2))
 
     no = n_orb(ints)
     k = RDM.pack_gradient(zeros(no,no), no)
     grad = deepcopy(k)
 
-    stepsize=1e-6
+    stepsize=1e-5
     for i in 1:length(k)
-        ki = deepcopy(k)
+        ki = zeros(no*(no-1)÷2) 
         ki[i] += stepsize
         Ki = RDM.unpack_gradient(ki, no)
         U = exp(Ki)
         intsi = orbital_rotation(ints,U)
         e1 = compute_energy(intsi, d1, d2)
         
-        ki = deepcopy(k)
+        ki = zeros(no*(no-1)÷2) 
         ki[i] -= stepsize
         Ki = RDM.unpack_gradient(ki, no)
         U = exp(Ki)
@@ -51,11 +52,16 @@ function numgrad(ints, d1::RDM1, d2::RDM2)
     println(" Analytical Gradient: ")
     display(norm(g))
     @printf("   Error: %12.8f\n",norm(g-grad))
-    println()
+    println(" Now compare gradients:")
+    println(" Numerical:")
+    display(round.(ClusterMeanField.unpack_gradient(grad, no), digits=7))
+    println(" Analytical:")
+    display(round.(ClusterMeanField.unpack_gradient(g, no), digits=7))
+    #error("here")
 end
 
-if false 
-#@testset "CMF" begin
+#if false 
+@testset "CMF" begin
     #h0 = npzread("h6_sto3g/h0.npy")
     #h1 = npzread("h6_sto3g/h1.npy")
     #h2 = npzread("h6_sto3g/h2.npy")
@@ -248,12 +254,16 @@ end
     display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
     display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
 
+    #f1 = cmf_ci(ints, clusters, init_fspace, d1, verbose=1, sequential=false)
+    #d1 = f1[2]
+    #d2 = f1[3]
+    #d1,d2 = ClusterMeanField.assemble_full_rdm(clusters, d1, d2)
     numgrad(ints, d1, d2)
 
     return
-    #e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
-    #                          verbose=0, gconv=1e-6, method="cg",sequential=true)
-    ##@test isapprox(e_cmf, -3.205983033016, atol=1e-10)
+    e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
+                              verbose=0, gconv=1e-6, method="gd",sequential=true)
+    @test isapprox(e_cmf, -3.050480022999, atol=1e-10)
     
     #Ccmf = Cl*U
     #ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")

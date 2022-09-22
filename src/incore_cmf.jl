@@ -335,6 +335,22 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
         end
     end
 
+    function g2(kappa)
+        norb = n_orb(ints)
+        # println(" In g_analytic")
+        K = unpack_gradient(kappa, norb)
+        U = exp(K)
+        ints2 = orbital_rotation(ints,U)
+        d1 = orbital_rotation(d,U)
+        
+        e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, 
+                                         dconv=gconv/10.0, verbose=verbose)
+
+        gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
+        gout = build_orbital_gradient(ints2, gd1, gd2)
+        g_curr = norm(gout)
+        return gout
+    end
     #
     #   Define Gradient function
     #
@@ -391,12 +407,15 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
         return gout
     end
 
-#    grad1 = g_numerical(kappa)
-#    grad2 = g(kappa)
-#    display(round.(unpack_gradient(grad1, norb),digits=6))
-#    display(round.(unpack_gradient(grad2, norb),digits=6))
-#    return
-
+    if false
+        grad1 = g_numerical(kappa)
+        grad2 = g(kappa)
+        grad3 = g2(kappa)
+        display(round.(unpack_gradient(grad1, norb),digits=6))
+        display(round.(unpack_gradient(grad2, norb),digits=6))
+        display(round.(unpack_gradient(grad3, norb),digits=6))
+        error("nick") 
+    end
     #display("here:")
     #gerr = g_numerical(kappa) - g(kappa)
     #display(norm(gerr))
@@ -426,6 +445,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
 
         #res = optimize(f, g_numerical, kappa, optmethod, options; inplace = false )
         res = optimize(f, g, kappa, optmethod, options; inplace = false )
+        #res = optimize(f, g2, kappa, optmethod, options; inplace = false )
         summary(res)
         e = Optim.minimum(res)
         display(res)

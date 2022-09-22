@@ -200,7 +200,7 @@ end
     clusters    = [(1:3),(4:6)]
     init_fspace = [(2,1),(1,2)]
     clusters    = [(1:3),(4:6)]
-    init_fspace = [(2,1),(2,1)]
+    init_fspace = [(2,2),(1,1)]
 
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)

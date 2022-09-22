@@ -1,5 +1,90 @@
 using ClusterMeanField
 
+"""
+    subset(ints::InCoreInts, list, rmd1a, rdm1b)
+Extract a subset of integrals acting on orbitals in list, returned as `InCoreInts` type
+and contract a 1rdm to give effectve 1 body interaction
+# Arguments
+- `ints::InCoreInts`: Integrals for full system 
+- `list`: list of orbital indices in subset
+- `rdm1a`: 1RDM for embedding α density to make CASCI hamiltonian
+- `rdm1b`: 1RDM for embedding β density to make CASCI hamiltonian
+"""
+function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
+    list = ci.orb_list
+    ints_i = subset(ints, list)
+    no = length(ci)
+    nofull = n_orb(ints)
+    da = deepcopy(rdm1.a)
+    db = deepcopy(rdm1.b)
+    da[list,list] .= 0
+    db[list,list] .= 0
+    da[:,list] .= 0
+    db[:,list] .= 0
+    da[list,:] .= 0
+    db[list,:] .= 0
+   
+    f = zeros(no, no)
+
+    if false 
+    
+        fa = zeros(nofull, nofull)
+        fb = zeros(nofull, nofull)
+        @tensor begin
+            fa[p,s] += ints.h2[p,s,q,r] * da[q,r]
+            fb[p,s] += ints.h2[p,s,q,r] * da[q,r]
+            fa[p,s] += ints.h2[p,s,q,r] * db[q,r]
+            fa[p,s] += ints.h2[p,s,q,r] * db[q,r]
+            
+
+            fa[q,r] += ints.h2[p,s,q,r] * da[p,s]
+            fb[q,r] += ints.h2[p,s,q,r] * da[p,s]
+            fa[q,r] += ints.h2[p,s,q,r] * db[p,s]
+            fa[q,r] += ints.h2[p,s,q,r] * db[p,s]
+            
+            fa[p,r] -= ints.h2[p,s,q,r] * da[q,s]
+            fb[p,r] -= ints.h2[p,s,q,r] * db[q,s]
+
+            fa[q,s] -= ints.h2[p,s,q,r] * da[p,r]
+            fb[q,s] -= ints.h2[p,s,q,r] * db[p,r]
+        end
+        fab = (fa + fb)./4
+        f = fab[list,list]
+    end
+    if true 
+        d1 = RDM1(da,db)
+        fa = zeros(nofull, nofull)
+        fb = zeros(nofull, nofull)
+        @tensor begin
+            fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s]
+            fa[p,s] -= .5*ints.h2[p,r,q,s] * d1.a[q,r]
+
+            fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
+            fb[p,s] -= .5*ints.h2[p,r,q,s] * d1.b[q,r]
+
+            #fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s]
+            #fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
+
+        end
+        f = (fa + fb)*1 
+        f = f[list,list]
+    end
+    #viirs = ints.h2[list, list,:,:]
+    #viqri = ints.h2[list, :, :, list]
+    #f = zeros(no, no)
+    #@tensor begin
+    #    f[p,q] += viirs[p,q,r,s] * da[r,s]
+    #    f[p,s] -= .5*viqri[p,q,r,s] * da[q,r]
+    #    
+    #    f[p,q] += viirs[p,q,r,s] * db[r,s]
+    #    f[p,s] -= .5*viqri[p,q,r,s] * db[q,r]
+    #end
+    #display(da)
+    #display(db)
+    ints_i.h1 .+= f
+    #h0 = compute_energy(ints, RDM1(da,db))
+    return InCoreInts(0.0, ints_i.h1, ints_i.h2) 
+end
 
 
 """
@@ -75,7 +160,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
 
         ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
         verbose < 2 || display(ansatz)
-        ints_i = subset(ints, ci, rdm1)
+        ints_i = mysubset(ints, ci, rdm1)
 
         #display(tmp.h1 - ints_i.h1)
         d1a = rdm1.a[ci.orb_list, ci.orb_list]
@@ -90,7 +175,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
         d2 = RDM2(no)
 
         e = 0.0
-        if ansatz.dim == -1
+        if ansatz.dim == 1
        
             da = zeros(T, no, no)
             db = zeros(T, no, no)
@@ -114,7 +199,8 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             solver = SolverSettings(verbose=1)
             solution = solve(ints_i, ansatz, solver)
             d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
-            
+           
+            #display(solution.vectors)
             d1 = RDM1(d1a, d1b)
             d2 = RDM2(d2aa, d2ab, d2bb)
 

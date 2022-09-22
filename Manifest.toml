@@ -253,7 +253,7 @@ version = "0.2.2"
 
 [[deps.InCoreIntegrals]]
 deps = ["Documenter", "JLD2", "LinearAlgebra", "NPZ", "QCBase", "Random", "TensorOperations"]
-git-tree-sha1 = "f0319c733708f3f4198af3bd6bc548690b2e5862"
+git-tree-sha1 = "d97fa197ebc67709656a544a8a8bda2a631d6ddb"
 repo-rev = "main"
 repo-url = "https://github.com/nmayhall-vt/InCoreIntegrals.jl"
 uuid = "d8079e1f-d74b-4a3d-abb0-c0b53e3a8379"
@@ -495,7 +495,7 @@ version = "1.94.1"
 
 [[deps.QCBase]]
 deps = ["Printf", "StaticArrays"]
-git-tree-sha1 = "97e803c0337c1eae0aff9833a00be360dba2ed2f"
+git-tree-sha1 = "6563e66eb0574f4cdf9f6f1259dcd50007be190c"
 repo-rev = "main"
 repo-url = "https://github.com/nmayhall-vt/QCBase.jl"
 uuid = "0dbae682-d491-4cbc-9a73-7148926f1b63"
@@ -503,7 +503,7 @@ version = "0.1.0"
 
 [[deps.RDM]]
 deps = ["ActiveSpaceSolvers", "BlockDavidson", "InCoreIntegrals", "JLD2", "LinearAlgebra", "NPZ", "Printf", "QCBase", "Random", "TensorOperations"]
-git-tree-sha1 = "0efc64dd42e5613245dc84eac07e869ae6b25c0b"
+git-tree-sha1 = "2a8f1a6f74b81f1a79f0504625ddb7e8a8507ad7"
 repo-rev = "main"
 repo-url = "https://github.com/nmayhall-vt/RDM.jl"
 uuid = "e382014c-6717-46ba-99dc-880f59d7a5e4"

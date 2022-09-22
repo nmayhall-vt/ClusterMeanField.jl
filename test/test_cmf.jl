@@ -133,9 +133,9 @@ end
     push!(atoms,Atom(1,"H",[0,0,0]))
     push!(atoms,Atom(2,"H",[1,0,0]))
     push!(atoms,Atom(3,"H",[2,0,0]))
-    push!(atoms,Atom(4,"H",[3,0,2]))
-    push!(atoms,Atom(5,"H",[4,0,2]))
-    push!(atoms,Atom(6,"H",[5,0,2]))
+    push!(atoms,Atom(4,"H",[3,0,0]))
+    push!(atoms,Atom(5,"H",[4,0,0]))
+    push!(atoms,Atom(6,"H",[5,0,0]))
     #basis = "6-31g"
     basis = "sto-3g"
 
@@ -251,12 +251,12 @@ end
     numgrad(ints, d1, d2)
 
     return
-    e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
-                              verbose=0, gconv=1e-6, method="cg",sequential=true)
-    #@test isapprox(e_cmf, -3.205983033016, atol=1e-10)
+    #e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
+    #                          verbose=0, gconv=1e-6, method="cg",sequential=true)
+    ##@test isapprox(e_cmf, -3.205983033016, atol=1e-10)
     
-    Ccmf = Cl*U
-    ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
+    #Ccmf = Cl*U
+    #ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
   
 end
 

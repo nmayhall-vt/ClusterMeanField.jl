@@ -1,5 +1,124 @@
 using ClusterMeanField
 
+function InCoreIntegrals.subset(ints::InCoreInts, ci::MOCluster)
+    return subset(ints, ci.orb_list) 
+end
+
+function InCoreIntegrals.subset(d::RDM1, ci::MOCluster)
+    return RDM1(d.a[ci.orb_list, ci.orb_list], d.b[ci.orb_list, ci.orb_list])
+end
+
+function InCoreIntegrals.subset(d::RDM2, ci::MOCluster)
+    return RDM2(d.aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list], d.ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list], d.bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] )
+end
+
+"""
+"""
+function cmf_ci_iteration2(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, in_rdm2::RDM2{T}, fspace; verbose=1,sequential=false) where T
+    rdm1 = deepcopy(in_rdm1)
+    rdm1_dict = Dict{Integer,RDM1{T}}()
+    rdm2_dict = Dict{Integer,RDM2{T}}()
+   
+
+    for ci in clusters
+        e_background = 0.0
+            
+        env = MOCluster(0, setdiff(1:n_orb(ints), ci.orb_list))
+        ints_env = subset(ints, env)
+        d1_env = subset(in_rdm1, env)
+        d2_env = subset(in_rdm2, env)
+        e_background = compute_energy(ints_env, d1_env, d2_env)
+        flush(stdout)
+
+        ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
+        #verbose < 2 || display(ansatz)
+        ints_i = mysubset(ints, ci, rdm1)
+
+        h_i = ints.h1[ci.orb_list, ci.orb_list]
+
+        g_i = ints_i.h1 - h_i
+            
+        #ints_i = InCoreInts(0.0, ints_i.h1 - .5*g_i, ints_i.h2)
+
+        #display(tmp.h1 - ints_i.h1)
+        #d1a = rdm1.a[ci.orb_list, ci.orb_list]
+        #d1b = rdm1.b[ci.orb_list, ci.orb_list]
+    
+
+        na = fspace[ci.idx][1]
+        nb = fspace[ci.idx][2]
+
+        no = length(ci)
+
+        d1 = subset(rdm1, ci)
+        d2 = RDM2(no)
+
+
+        e = 0.0
+        if ansatz.dim == 1
+            e_init = compute_energy(ints_i, d1) + e_background + ints.h0
+            
+            da = zeros(T, no, no)
+            db = zeros(T, no, no)
+            if ansatz.na == no
+                da = Matrix(1.0I, no, no)
+            end
+            if ansatz.nb == no
+                db = Matrix(1.0I, no, no)
+            end
+
+            d1 = RDM1(da,db)
+            d2 = RDM2(d1)
+            
+            #e = compute_energy(ints_i, d1) + e_background + ints.h0
+            e = compute_energy(ints_i, d1) + e_background + ints.h0
+            verbose < 2 || @printf(" Slater Det Energy: %12.8f Initial: %12.8f\n", e, e_init)
+            #verbose < 2 || @printf(" Slater Det Energy: %12.8f Initial: %12.8f Env: %12.8f\n", e, e_init, e_background)
+        else
+            #
+            # run PYSCF FCI
+            #e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
+           
+            solver = SolverSettings(verbose=1)
+            solution = solve(ints_i, ansatz, solver)
+            d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
+            solution.energies .+= e_background  + ints.h0
+            display(solution)
+            #display(solution.vectors)
+            
+            d1 = RDM1(d1a, d1b)
+            d2 = RDM2(d2aa, d2ab, d2bb)
+
+#            pyscf = pyimport("pyscf")
+#            fci = pyimport("pyscf.fci")
+#            cisolver = pyscf.fci.direct_spin1.FCI()
+#            cisolver.max_cycle = 100 
+#            cisolver.conv_tol = 1e-8
+#            nelec = na + nb
+#            e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
+#            (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
+#
+#            d1 = RDM1(d1a, d1b)
+#            d2 = RDM2(d2aa, d2ab, d2bb)
+
+        end
+
+        rdm1_dict[ci.idx] = d1
+        rdm2_dict[ci.idx] = d2
+
+        if sequential==true
+            rdm1.a[ci.orb_list,ci.orb_list] = d1.a
+            rdm1.b[ci.orb_list,ci.orb_list] = d1.b
+        end
+    end
+    e_curr = compute_energy(ints, rdm1_dict, rdm2_dict, clusters, verbose=verbose)
+    
+    if verbose > 1
+        @printf(" CMF-CI Curr: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
+    end
+
+    return e_curr, rdm1_dict, rdm2_dict
+end
 """
     subset(ints::InCoreInts, list, rmd1a, rdm1b)
 Extract a subset of integrals acting on orbitals in list, returned as `InCoreInts` type
@@ -53,18 +172,18 @@ function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
         d1 = RDM1(da,db)
         fa = zeros(nofull, nofull)
         fb = zeros(nofull, nofull)
+        #display(d1)
         @tensor begin
-            fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s]
-            fa[p,s] -= .5*ints.h2[p,r,q,s] * d1.a[q,r]
-
+            fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s] 
             fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
-            fb[p,s] -= .5*ints.h2[p,r,q,s] * d1.b[q,r]
+            fa[p,s] -= ints.h2[p,r,q,s] * d1.a[q,r]
+            fb[p,s] -= ints.h2[p,r,q,s] * d1.b[q,r]
 
-            #fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s]
-            #fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
+            fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s]
+            fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
 
         end
-        f = (fa + fb)*1 
+        f = ints.h1 + .5*(fa + fb)
         f = f[list,list]
     end
     #viirs = ints.h2[list, list,:,:]
@@ -79,7 +198,7 @@ function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
     #end
     #display(da)
     #display(db)
-    ints_i.h1 .+= f
+    ints_i.h1 .= f
     #@printf(" energy?: %12.8f\n", compute_energy(ints, rdm1))
     #@printf(" energy?: %12.8f\n", compute_energy(ints, rdm1))
     #h0 = compute_energy(ints, RDM1(da,db))

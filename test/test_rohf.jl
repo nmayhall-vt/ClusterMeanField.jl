@@ -15,13 +15,12 @@ using PyCall
     push!(atoms,Atom(2,"H",[1,0,0]))
     push!(atoms,Atom(3,"H",[2,0,0]))
     push!(atoms,Atom(4,"H",[3,0,0]))
-    push!(atoms,Atom(5,"H",[4,0,0]))
-    push!(atoms,Atom(6,"H",[5,0,0]))
-    push!(atoms,Atom(7,"H",[6,0,0]))
-    push!(atoms,Atom(8,"H",[7,0,0]))
+    #push!(atoms,Atom(5,"H",[4,0,0]))
+    #push!(atoms,Atom(6,"H",[5,0,0]))
+    #push!(atoms,Atom(7,"H",[6,0,0]))
+    #push!(atoms,Atom(8,"H",[7,0,0]))
     basis = "sto-3g"
 
-    mol     = Molecule(2,1,atoms,basis)
     mol     = Molecule(0,3,atoms,basis)
     pymol = ClusterMeanField.make_pyscf_mole(mol)
     pyscf = pyimport("pyscf")
@@ -46,12 +45,18 @@ using PyCall
     clusters    = [(1,),(2,),(3,),(4,),(5,),(6,),(7,),(8,)]
     init_fspace = [(1,1),(1,1),(1,1),(1,0),(1,0),(0,0),(0,0),(0,0)]
     
+    clusters    = [(1,),(2,)]
+    init_fspace = [(1,0),(1,0)]
+    
+    clusters    = [(1,),(2,),(3,),(4,)]
+    init_fspace = [(1,1),(1,0),(0,1),(0,0)]
+    
     
     
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
     
-    sol = solve(ints, FCIAnsatz(8,5,3), SolverSettings())
+    sol = solve(ints, FCIAnsatz(4,3,1), SolverSettings())
     display(sol)
 
     #display(mf.mo_coeff)

@@ -172,6 +172,7 @@ function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
         d1 = RDM1(da,db)
         fa = zeros(nofull, nofull)
         fb = zeros(nofull, nofull)
+
         #display(d1)
         @tensor begin
             fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s] 
@@ -183,7 +184,9 @@ function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
             fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
 
         end
-        f = ints.h1 + .5*(fa + fb)
+        f = (fa + fb)/2
+        #display(fa)
+        f = ints.h1 + f 
         f = f[list,list]
     end
     #viirs = ints.h2[list, list,:,:]

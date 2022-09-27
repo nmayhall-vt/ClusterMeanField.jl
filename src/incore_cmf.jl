@@ -1,16 +1,5 @@
 using ClusterMeanField
 
-function InCoreIntegrals.subset(ints::InCoreInts, ci::MOCluster)
-    return subset(ints, ci.orb_list) 
-end
-
-function InCoreIntegrals.subset(d::RDM1, ci::MOCluster)
-    return RDM1(d.a[ci.orb_list, ci.orb_list], d.b[ci.orb_list, ci.orb_list])
-end
-
-function InCoreIntegrals.subset(d::RDM2, ci::MOCluster)
-    return RDM2(d.aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list], d.ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list], d.bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] )
-end
 
 
 
@@ -111,6 +100,11 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             if ansatz.nb == no
                 db = Matrix(1.0I, no, no)
             end
+            
+            if spin_avg
+                da = .5*(da + db)
+                db .= da
+            end
 
             d1 = RDM1(da,db)
             d2 = RDM2(d1)
@@ -125,9 +119,8 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             solver = SolverSettings(verbose=1)
             solution = solve(ints_i, ansatz, solver)
             d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
-        
-            #display(solution)
-            #display(solution.vectors)
+       
+            verbose < 2 || display(solution)
             
             if spin_avg
                 v = solution.vectors[:,1]
@@ -267,8 +260,14 @@ end
 
 
 """
-    cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess_a, dguess_b; 
-                max_iter_oo=100, max_iter_ci=100, gconv=1e-6, verbose=0, method="bfgs", alpha=nothing,sequential=false)
+    cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                max_iter_oo=100, 
+                max_iter_ci=100, 
+                gconv=1e-6, 
+                verbose=0, 
+                method="bfgs", 
+                alpha=nothing,
+                sequential=false) where T
 
 Do CMF with orbital optimization
 

@@ -130,14 +130,14 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             #display(solution.vectors)
             
             if spin_avg
-                #v = solution.vectors[:,1]
-                #v = reshape(v, (ansatz.dima, ansatz.dimb))
-                #v = Matrix(v')
-                #v = reshape(v, (ansatz.dima * ansatz.dimb, 1))
+                v = solution.vectors[:,1]
+                v = reshape(v, (ansatz.dima, ansatz.dimb))
+                v = Matrix(v')
+                v = reshape(v, (ansatz.dima * ansatz.dimb, 1))
         
                 ansatz_flipped = FCIAnsatz(length(ci), fspace[ci.idx][2],fspace[ci.idx][1])
-                #solution_flipped = Solution(ansatz_flipped, solution.energies, v)
-                solution_flipped = solve(ints_i, ansatz_flipped, solver)
+                solution_flipped = Solution(ansatz_flipped, solution.energies, v)
+                #solution_flipped = solve(ints_i, ansatz_flipped, solver)
                 _d1a, _d1b, _d2aa, _d2bb, _d2ab = compute_1rdm_2rdm(solution_flipped)
                
                 d1a = (d1a + _d1a) * .5

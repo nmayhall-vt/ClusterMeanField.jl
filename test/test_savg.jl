@@ -9,8 +9,7 @@ using InCoreIntegrals
 using ActiveSpaceSolvers
 
     
-#@testset "CMF open shell" begin
-function test() 
+@testset "CMF open shell" begin
     atoms = []
     push!(atoms,Atom(1,"H",[0,0,0]))
     push!(atoms,Atom(2,"H",[1,0,0]))
@@ -126,41 +125,8 @@ function test()
         display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
         display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
     end
-    e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
+    e_cmf, U, d1 = cmf_oo(ints, clusters, init_fspace, d1, 
                               verbose=0, gconv=1e-6, method="cg",sequential=true)
-    return
-    
-    @test isapprox(compute_energy(ints, rdm1, rdm2), compute_energy(ints, d1, d2), atol=1e-12)
-    @test isapprox(compute_energy(ints, rdm1, rdm2), compute_energy(ints, d1dict, d2dict, clusters), atol=1e-12)
 
-#    #g_anl2 = build_orbital_gradient(ints, d1, d2)
-#    @printf(" Shold be FCI: %12.8f\n",compute_energy(ints, d1_fci, d2_fci))
-#    g_anl2 = ClusterMeanField.mybuild_orbital_gradient(ints, d1_fci, d2_fci)
-#    println(" Here is the error:")
-#    display(norm(g_num-g_anl2))
-#    display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
-#    display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
-#    #display(g_num)
-#    #display(g_anl2)
-   
-
-    g_anl2 = build_orbital_gradient(ints, d1, d2)
-    println(" Here is the error:")
-    display(norm(g_num-g_anl2))
-   
-    display(round.(ClusterMeanField.unpack_gradient(g_num, n), digits=7))
-    display(round.(ClusterMeanField.unpack_gradient(g_anl2, n), digits=7))
-
-    #f1 = cmf_ci(ints, clusters, init_fspace, d1, verbose=1, sequential=false)
-    #d1 = f1[2]
-    #d2 = f1[3]
-    #d1,d2 = ClusterMeanField.assemble_full_rdm(clusters, d1, d2)
-    numgrad(ints, d1, d2)
-
-    #@test isapprox(e_cmf, -3.050480022999, atol=1e-10)
-    
-    #Ccmf = Cl*U
-    #ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
-  
+    @test isapprox(e_cmf, -3.104850893117, atol=1e-10)
 end
-test()

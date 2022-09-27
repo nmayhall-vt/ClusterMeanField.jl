@@ -284,55 +284,30 @@ Do CMF with orbital optimization
 - `verbose`: Printing level 
 - `method`: optimization method
 """
-function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::RDM1; 
+function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
                 max_iter_oo=100, 
                 max_iter_ci=100, 
                 gconv=1e-6, 
                 verbose=0, 
                 method="bfgs", 
                 alpha=nothing,
-                sequential=false)
+                sequential=false) where T
     norb = size(ints.h1)[1]
-    #kappa = zeros(norb*(norb-1))
-    # e, da, db = cmf_oo_iteration(ints, clusters, fspace, max_iter_ci, dguess, kappa)
-
-    function g_numerical(k)
-        stepsize = 1e-6
-        grad = zeros(size(k))
-        for (ii,i) in enumerate(k)
-            k1 = deepcopy(k)
-            k1[ii] += stepsize
-            e1 = f(k1) 
-            k2 = deepcopy(k)
-            k2[ii] -= stepsize
-            e2 = f(k2) 
-            grad[ii] = (e1-e2)/(2*stepsize)
-        end
-        g_curr = norm(grad)
-        return grad
-    end
 
     #   
     #   Initialize optimization data
     #
     e_prev = 0
+    e_tmp  = 0
     e_curr = 0
+
+    g_prev = 0
+    g_tmp  = 0
     g_curr = 0
-    e_err = 0
-    #da = zeros(size(ints.h1))
-    #db = zeros(size(ints.h1))
-    d = deepcopy(dguess)
-    d1 = deepcopy(dguess)
-    d2 = deepcopy(dguess)
-    
-    da = deepcopy(dguess.a)
-    db = deepcopy(dguess.b)
-
-    da1 = deepcopy(dguess.a)
-    db1 = deepcopy(dguess.b)
-
-    da2 = deepcopy(dguess.a)
-    db2 = deepcopy(dguess.b)
+  
+    d1_prev = deepcopy(dguess) 
+    d1_tmp  = deepcopy(dguess) 
+    d1_curr = deepcopy(dguess) 
 
     iter = 0
     kappa = zeros(norb*(norb-1)÷2)
@@ -341,17 +316,35 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
     #   Define Objective function (energy)
     #
     function f(k)
-        #display(norm(k))
         K = unpack_gradient(k, norb)
         U = exp(K)
-        ints2 = orbital_rotation(ints,U)
-        d1  = orbital_rotation(d,U)
-        e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, 
-                                         dconv=gconv/10.0, verbose=0,sequential=sequential)
-        d2  = orbital_rotation(d1,U')
-        e_err = e-e_curr
-        e_curr = e
+        ints_tmp = orbital_rotation(ints,U)
+        e, rdm1_dict, _ = cmf_ci(ints_tmp, clusters, fspace, orbital_rotation(d1_curr, U), 
+                                         dconv=gconv/10.0, verbose=0, sequential=sequential)
+        
+        d1_tmp = assemble_full_rdm(clusters, rdm1_dict)
+        d1_tmp = orbital_rotation(d1_tmp, U')
+        e_tmp = e
+        
         return e
+    end
+
+    #
+    #   Define Gradient function
+    #
+    function g(kappa)
+        norb = n_orb(ints)
+        K = unpack_gradient(kappa, norb)
+        U = exp(K)
+       
+        ints_tmp = orbital_rotation(ints,U)
+        e, rdm1_dict, rdm2_dict = cmf_ci(ints_tmp, clusters, fspace, orbital_rotation(d1_curr,U), 
+                                         dconv=gconv/10.0, verbose=verbose)
+
+        gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
+        gout = build_orbital_gradient(ints_tmp, gd1, gd2)
+        g_tmp = norm(gout)
+        return gout
     end
 
     #   
@@ -360,13 +353,10 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
     function callback(k)
        
         # reset initial RDM guess for each cmf_ci
-        da = deepcopy(da2)
-        db = deepcopy(db2)
+        d1_curr  = deepcopy(d1_tmp) 
+        e_curr   = e_tmp
+        g_curr   = g_tmp
 
-        #if e_err > 0
-        #    @warn " energy increased"
-        #    return true
-        #end
         iter += 1
         if (g_curr < gconv) 
             @printf("*ooCMF Iter: %4i Total= %16.12f Active= %16.12f G= %12.2e\n", iter, e_curr, e_curr-ints.h0, g_curr)
@@ -375,88 +365,6 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
             @printf(" ooCMF Iter: %4i Total= %16.12f Active= %16.12f G= %12.2e\n", iter, e_curr, e_curr-ints.h0, g_curr)
             return false 
         end
-    end
-
-    function g(kappa)
-        norb = n_orb(ints)
-        # println(" In g_analytic")
-        K = unpack_gradient(kappa, norb)
-        U = exp(K)
-        ints2 = orbital_rotation(ints,U)
-        d1 = orbital_rotation(d,U)
-        
-        e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, 
-                                         dconv=gconv/10.0, verbose=verbose)
-
-        gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
-        gout = build_orbital_gradient(ints2, gd1, gd2)
-        g_curr = norm(gout)
-        return gout
-    end
-    #
-    #   Define Gradient function
-    #
-    function g2(kappa)
-        norb = size(ints.h1)[1]
-        # println(" In g_analytic")
-        K = unpack_gradient(kappa, norb)
-        U = exp(K)
-        #println(size(U), size(kappa))
-        ints2 = orbital_rotation(ints,U)
-        d1 = orbital_rotation(d,U)
-        
-        e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, 
-                                         dconv=gconv/10.0, verbose=verbose)
-        grad = zeros(size(ints2.h1))
-        for ci in clusters
-            grad_1 = grad[:,ci.orb_list]
-            h_1	   = ints2.h1[:,ci.orb_list]
-            v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
-            @tensor begin
-                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].aa[q,v,u,w]
-                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].bb[q,v,u,w]
-                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[q,v,u,w]
-                grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[u,w,q,v]
-                grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx].a[r,q]+rdm1_dict[ci.idx].b[r,q])
-            end
-            for cj in clusters
-                if ci.idx == cj.idx
-                    continue
-                end
-                v_212 = ints2.h2[:,cj.orb_list, ci.orb_list, cj.orb_list]
-                v_122 = ints2.h2[:,ci.orb_list, cj.orb_list, cj.orb_list]
-                d1 = rdm1_dict[ci.idx].a + rdm1_dict[ci.idx].b
-                d2 = rdm1_dict[cj.idx].a + rdm1_dict[cj.idx].b
-                
-                d1a = rdm1_dict[ci.idx].a
-                d1b = rdm1_dict[ci.idx].b
-                d2a = rdm1_dict[cj.idx].a
-                d2b = rdm1_dict[cj.idx].b
-
-                @tensor begin
-                    #grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
-                    #grad_1[p,q] -= .5*v_212[p,v,u,w] * d1[q,u] * d2[w,v]
-                    grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
-                    grad_1[p,q] -= v_212[p,v,u,w] * d1a[q,u] * d2a[w,v]
-                    grad_1[p,q] -= v_212[p,v,u,w] * d1b[q,u] * d2b[w,v]
-                end
-            end
-            grad[:,ci.orb_list] .= -2*grad_1
-        end
-        grad = grad'-grad
-        gout = pack_gradient(grad, norb)
-        g_curr = norm(gout)
-        return gout
-    end
-
-    if false 
-        grad1 = g_numerical(kappa)
-        grad2 = g(kappa)
-        grad3 = g2(kappa)
-        display(round.(unpack_gradient(grad1, norb),digits=6))
-        display(round.(unpack_gradient(grad2, norb),digits=6))
-        display(round.(unpack_gradient(grad3, norb),digits=6))
-        error("nick") 
     end
 
     if (method=="bfgs") || (method=="cg") || (method=="gd")
@@ -478,9 +386,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
                                 iterations=max_iter_oo,
                                )
 
-        #res = optimize(f, g_numerical, kappa, optmethod, options; inplace = false )
         res = optimize(f, g, kappa, optmethod, options; inplace = false )
-        #res = optimize(f, g2, kappa, optmethod, options; inplace = false )
         summary(res)
         e = Optim.minimum(res)
         display(res)
@@ -489,9 +395,9 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
         kappa = Optim.minimizer(res)
         K = unpack_gradient(kappa, norb)
         U = exp(K)
-        da1 = U'*da*U
-        db1 = U'*db*U
-        return e, U, da1, db1
+        d1 = orbital_rotation(d1_curr, U)
+        return e, U, d1
+
     elseif method=="diis"
         res = do_diis(f, g, callback, kappa, gconv, max_iter_oo, method)
     end
@@ -582,73 +488,6 @@ function assemble_full_rdm(clusters::Vector{MOCluster}, rdm1s::Dict{Integer, RDM
 end
 
 
-#
-"""
-    orbital_gradient_analytical(ints, clusters, kappa, fspace, da, db;
-                                    gconv = 1e-8,
-                                    verbose = 1)
-Compute orbital gradient analytically
-```math
-w_{pq} = 2(f_{pq} - f_{qp})
-```
-```math
-f_{pq} = h_{pr}P_{rq} + 2 <rs||tp> G_{pstq}
-```
-"""
-function orbital_gradient_analytical(ints, clusters, kappa, fspace, rdm::RDM1;
-                                    ci_conv = 1e-8,
-                                    verbose = 0)
-#={{{=#
-    norb = n_orb(ints)
-    # println(" In g_analytic")
-    K = unpack_gradient(kappa, norb)
-    U = exp(K)
-    ints2 = orbital_rotation(ints,U)
-    d1 = orbital_rotation(rdm,U)
-
-    e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, dconv=ci_conv, verbose=verbose)
-    grad = zeros(size(ints2.h1))
-    for ci in clusters
-        grad_1 = grad[:,ci.orb_list]
-        h_1	   = ints2.h1[:,ci.orb_list]
-        v_111  = ints2.h2[:, ci.orb_list, ci.orb_list, ci.orb_list]
-        @tensor begin
-            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].aa[q,v,u,w]
-            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].bb[q,v,u,w]
-            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[q,v,u,w]
-            grad_1[p,q] += v_111[p,v,u,w] * rdm2_dict[ci.idx].ab[u,v,q,w]
-            grad_1[p,q] += h_1[p,r] * (rdm1_dict[ci.idx].a[r,q]+rdm1_dict[ci.idx].b[r,q])
-        end
-        for cj in clusters
-            if ci.idx == cj.idx
-                continue
-            end
-            v_212 = ints2.h2[:,cj.orb_list, ci.orb_list, cj.orb_list]
-            v_122 = ints2.h2[:,ci.orb_list, cj.orb_list, cj.orb_list]
-            d1 = rdm1_dict[ci.idx].a + rdm1_dict[ci.idx].b
-            d2 = rdm1_dict[cj.idx].a + rdm1_dict[cj.idx].b
-
-            d1a = rdm1_dict[ci.idx].a
-            d1b = rdm1_dict[ci.idx].b
-            d2a = rdm1_dict[cj.idx].a
-            d2b = rdm1_dict[cj.idx].b
-
-            @tensor begin
-                #grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
-                #grad_1[p,q] -= .5*v_212[p,v,u,w] * d1[q,u] * d2[w,v]
-                grad_1[p,q] += v_122[p,v,u,w] * d1[q,v] * d2[w,u]
-                grad_1[p,q] -= v_212[p,v,u,w] * d1a[q,u] * d2a[w,v]
-                grad_1[p,q] -= v_212[p,v,u,w] * d1b[q,u] * d2b[w,v]
-            end
-        end
-        grad[:,ci.orb_list] .= -2*grad_1
-    end
-    grad .= grad .- grad'
-    #grad = U*grad*U'
-    gout = pack_gradient(grad, norb)
-    return gout
-end
-#=}}}=#
 
 """
     orbital_objective_function(ints, clusters, kappa, fspace, da, db; 

@@ -139,9 +139,9 @@ end
     push!(atoms,Atom(1,"H",[0,0,0]))
     push!(atoms,Atom(2,"H",[1,0,0]))
     push!(atoms,Atom(3,"H",[2,0,0]))
-    push!(atoms,Atom(4,"H",[3,0,0]))
-    push!(atoms,Atom(5,"H",[4,0,0]))
-    push!(atoms,Atom(6,"H",[5,0,0]))
+    push!(atoms,Atom(4,"H",[3,1,0]))
+    push!(atoms,Atom(5,"H",[4,1,0]))
+    push!(atoms,Atom(6,"H",[5,1,0]))
     #basis = "6-31g"
     basis = "sto-3g"
 
@@ -200,7 +200,7 @@ end
     clusters    = [(1:3),(4:6)]
     init_fspace = [(2,1),(1,2)]
     clusters    = [(1:3),(4:6)]
-    init_fspace = [(2,2),(1,1)]
+    init_fspace = [(2,1),(2,2)]
 
     clusters = [MOCluster(i,collect(clusters[i])) for i = 1:length(clusters)]
     display(clusters)
@@ -211,7 +211,7 @@ end
     f1 = cmf_ci(ints, clusters, init_fspace, rdm1, 
                         verbose=1, sequential=false)
    
-    
+   
     g_num = ClusterMeanField.orbital_gradient_numerical(ints, clusters, k, init_fspace, rdm1, stepsize=1e-5) 
     g_anl = ClusterMeanField.orbital_gradient_analytical(ints, clusters, k, init_fspace, rdm1) 
     println(" Here is the error:")
@@ -262,9 +262,8 @@ end
     #d1,d2 = ClusterMeanField.assemble_full_rdm(clusters, d1, d2)
     numgrad(ints, d1, d2)
 
-    return
-    #e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
-    #                          verbose=0, gconv=1e-6, method="gd",sequential=true)
+    e_cmf, U = cmf_oo(ints, clusters, init_fspace, d1, 
+                              verbose=0, gconv=1e-6, method="cg",sequential=true)
     #@test isapprox(e_cmf, -3.050480022999, atol=1e-10)
     
     #Ccmf = Cl*U

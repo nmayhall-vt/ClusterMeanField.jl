@@ -12,205 +12,6 @@ function InCoreIntegrals.subset(d::RDM2, ci::MOCluster)
     return RDM2(d.aa[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list], d.ab[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list], d.bb[ci.orb_list, ci.orb_list, ci.orb_list, ci.orb_list] )
 end
 
-"""
-"""
-function cmf_ci_iteration2(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, in_rdm2::RDM2{T}, fspace; verbose=1,sequential=false) where T
-    rdm1 = deepcopy(in_rdm1)
-    rdm1_dict = Dict{Integer,RDM1{T}}()
-    rdm2_dict = Dict{Integer,RDM2{T}}()
-   
-
-    for ci in clusters
-        e_background = 0.0
-            
-        env = MOCluster(0, setdiff(1:n_orb(ints), ci.orb_list))
-        ints_env = subset(ints, env)
-        d1_env = subset(in_rdm1, env)
-        d2_env = subset(in_rdm2, env)
-        e_background = compute_energy(ints_env, d1_env, d2_env)
-        flush(stdout)
-
-        ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
-        #verbose < 2 || display(ansatz)
-        ints_i = mysubset(ints, ci, rdm1)
-
-        h_i = ints.h1[ci.orb_list, ci.orb_list]
-
-        g_i = ints_i.h1 - h_i
-            
-        #ints_i = InCoreInts(0.0, ints_i.h1 - .5*g_i, ints_i.h2)
-
-        #display(tmp.h1 - ints_i.h1)
-        #d1a = rdm1.a[ci.orb_list, ci.orb_list]
-        #d1b = rdm1.b[ci.orb_list, ci.orb_list]
-    
-
-        na = fspace[ci.idx][1]
-        nb = fspace[ci.idx][2]
-
-        no = length(ci)
-
-        d1 = subset(rdm1, ci)
-        d2 = RDM2(no)
-
-
-        e = 0.0
-        if ansatz.dim == 1
-            e_init = compute_energy(ints_i, d1) + e_background + ints.h0
-            
-            da = zeros(T, no, no)
-            db = zeros(T, no, no)
-            if ansatz.na == no
-                da = Matrix(1.0I, no, no)
-            end
-            if ansatz.nb == no
-                db = Matrix(1.0I, no, no)
-            end
-
-            d1 = RDM1(da,db)
-            d2 = RDM2(d1)
-            
-            #e = compute_energy(ints_i, d1) + e_background + ints.h0
-            e = compute_energy(ints_i, d1) + e_background + ints.h0
-            verbose < 2 || @printf(" Slater Det Energy: %12.8f Initial: %12.8f\n", e, e_init)
-            #verbose < 2 || @printf(" Slater Det Energy: %12.8f Initial: %12.8f Env: %12.8f\n", e, e_init, e_background)
-        else
-            #
-            # run PYSCF FCI
-            #e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
-           
-            solver = SolverSettings(verbose=1)
-            solution = solve(ints_i, ansatz, solver)
-            d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
-            solution.energies .+= e_background  + ints.h0
-            display(solution)
-            #display(solution.vectors)
-            
-            d1 = RDM1(d1a, d1b)
-            d2 = RDM2(d2aa, d2ab, d2bb)
-
-#            pyscf = pyimport("pyscf")
-#            fci = pyimport("pyscf.fci")
-#            cisolver = pyscf.fci.direct_spin1.FCI()
-#            cisolver.max_cycle = 100 
-#            cisolver.conv_tol = 1e-8
-#            nelec = na + nb
-#            e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
-#            (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
-#
-#            d1 = RDM1(d1a, d1b)
-#            d2 = RDM2(d2aa, d2ab, d2bb)
-
-        end
-
-        rdm1_dict[ci.idx] = d1
-        rdm2_dict[ci.idx] = d2
-
-        if sequential==true
-            rdm1.a[ci.orb_list,ci.orb_list] = d1.a
-            rdm1.b[ci.orb_list,ci.orb_list] = d1.b
-        end
-    end
-    e_curr = compute_energy(ints, rdm1_dict, rdm2_dict, clusters, verbose=verbose)
-    
-    if verbose > 1
-        @printf(" CMF-CI Curr: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
-    end
-
-    return e_curr, rdm1_dict, rdm2_dict
-end
-"""
-    subset(ints::InCoreInts, list, rmd1a, rdm1b)
-Extract a subset of integrals acting on orbitals in list, returned as `InCoreInts` type
-and contract a 1rdm to give effectve 1 body interaction
-# Arguments
-- `ints::InCoreInts`: Integrals for full system 
-- `list`: list of orbital indices in subset
-- `rdm1a`: 1RDM for embedding α density to make CASCI hamiltonian
-- `rdm1b`: 1RDM for embedding β density to make CASCI hamiltonian
-"""
-function mysubset(ints::InCoreInts, ci::MOCluster, rdm1::RDM1)
-    list = ci.orb_list
-    ints_i = subset(ints, list)
-    no = length(ci)
-    nofull = n_orb(ints)
-    da = deepcopy(rdm1.a)
-    db = deepcopy(rdm1.b)
-    da[:,list] .= 0
-    db[:,list] .= 0
-    da[list,:] .= 0
-    db[list,:] .= 0
-   
-    f = zeros(no, no)
-
-    if false 
-    
-        fa = zeros(nofull, nofull)
-        fb = zeros(nofull, nofull)
-        @tensor begin
-            fa[p,s] += ints.h2[p,s,q,r] * da[q,r]
-            fb[p,s] += ints.h2[p,s,q,r] * da[q,r]
-            fa[p,s] += ints.h2[p,s,q,r] * db[q,r]
-            fa[p,s] += ints.h2[p,s,q,r] * db[q,r]
-            
-
-            fa[q,r] += ints.h2[p,s,q,r] * da[p,s]
-            fb[q,r] += ints.h2[p,s,q,r] * da[p,s]
-            fa[q,r] += ints.h2[p,s,q,r] * db[p,s]
-            fa[q,r] += ints.h2[p,s,q,r] * db[p,s]
-            
-            fa[p,r] -= ints.h2[p,s,q,r] * da[q,s]
-            fb[p,r] -= ints.h2[p,s,q,r] * db[q,s]
-
-            fa[q,s] -= ints.h2[p,s,q,r] * da[p,r]
-            fb[q,s] -= ints.h2[p,s,q,r] * db[p,r]
-        end
-        fab = (fa + fb)./4
-        f = fab[list,list]
-    end
-    if true 
-        d1 = RDM1(da,db)
-        fa = zeros(nofull, nofull)
-        fb = zeros(nofull, nofull)
-
-        #display(d1)
-        @tensor begin
-            fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s] 
-            fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
-            fa[p,s] -= ints.h2[p,r,q,s] * d1.a[q,r]
-            fb[p,s] -= ints.h2[p,r,q,s] * d1.b[q,r]
-
-            fa[p,r] += ints.h2[p,r,q,s] * d1.a[q,s]
-            fb[p,r] += ints.h2[p,r,q,s] * d1.b[q,s]
-
-        end
-        f = (fa + fb)/2
-        #display(fa)
-        f = ints.h1 + f 
-        f = f[list,list]
-    end
-    #viirs = ints.h2[list, list,:,:]
-    #viqri = ints.h2[list, :, :, list]
-    #f = zeros(no, no)
-    #@tensor begin
-    #    f[p,q] += viirs[p,q,r,s] * da[r,s]
-    #    f[p,s] -= .5*viqri[p,q,r,s] * da[q,r]
-    #    
-    #    f[p,q] += viirs[p,q,r,s] * db[r,s]
-    #    f[p,s] -= .5*viqri[p,q,r,s] * db[q,r]
-    #end
-    #display(da)
-    #display(db)
-    ints_i.h1 .= f
-    #@printf(" energy?: %12.8f\n", compute_energy(ints, rdm1))
-    #@printf(" energy?: %12.8f\n", compute_energy(ints, rdm1))
-    #h0 = compute_energy(ints, RDM1(da,db))
-    #h1 = compute_energy(ints_i, RDM1(rdm1.a[list,list], rdm1.b[list,list]))
-    #@printf(" energy?: %12.8f\n", h0 + tr(ints_i.h1*(rdm1.a[list, list] + rdm1.b[list, list] )))
-    #@printf(" energy?: %12.8f\n", h0 + h1 )
-
-    return InCoreInts(.0, ints_i.h1, ints_i.h2) 
-end
 
 
 """
@@ -276,7 +77,7 @@ end
 
 Perform single CMF-CI iteration, returning new energy, and density
 """
-function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; verbose=1,sequential=false) where T
+function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; verbose=1,sequential=false, spin_avg=true) where T
     rdm1 = deepcopy(in_rdm1)
     rdm1_dict = Dict{Integer,RDM1{T}}()
     rdm2_dict = Dict{Integer,RDM2{T}}()
@@ -286,9 +87,8 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
 
         ansatz = FCIAnsatz(length(ci), fspace[ci.idx][1],fspace[ci.idx][2])
         verbose < 2 || display(ansatz)
-        ints_i = mysubset(ints, ci, rdm1)
+        ints_i = subset(ints, ci, rdm1)
 
-        #display(tmp.h1 - ints_i.h1)
         d1a = rdm1.a[ci.orb_list, ci.orb_list]
         d1b = rdm1.b[ci.orb_list, ci.orb_list]
 
@@ -328,6 +128,25 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
         
             #display(solution)
             #display(solution.vectors)
+            
+            if spin_avg
+                #v = solution.vectors[:,1]
+                #v = reshape(v, (ansatz.dima, ansatz.dimb))
+                #v = Matrix(v')
+                #v = reshape(v, (ansatz.dima * ansatz.dimb, 1))
+        
+                ansatz_flipped = FCIAnsatz(length(ci), fspace[ci.idx][2],fspace[ci.idx][1])
+                #solution_flipped = Solution(ansatz_flipped, solution.energies, v)
+                solution_flipped = solve(ints_i, ansatz_flipped, solver)
+                _d1a, _d1b, _d2aa, _d2bb, _d2ab = compute_1rdm_2rdm(solution_flipped)
+               
+                d1a = (d1a + _d1a) * .5
+                d1b = (d1b + _d1b) * .5
+                d2aa = (d2aa + _d2aa) * .5
+                d2ab = (d2ab + _d2ab) * .5
+                d2bb = (d2bb + _d2bb) * .5
+            end
+            
             d1 = RDM1(d1a, d1b)
             d2 = RDM2(d2aa, d2ab, d2bb)
 
@@ -345,6 +164,17 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
 
         end
 
+#        if spin_avg
+#            d1.a .= .5*(d1.a + d1.b)
+#            d1.b .= d1.a
+#            d2.aa .= .5*(d2.aa + d2.bb)
+#            d2.bb .= d2.aa
+#            ab = reshape(d2.ab, (no*no, no*no))
+#            ab .= (ab .+ ab').*.5
+#            ab = reshape(ab, (no, no, no, no))
+#            #d2.ab .= ab
+#        end
+        
         rdm1_dict[ci.idx] = d1
         rdm2_dict[ci.idx] = d2
 
@@ -355,7 +185,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
     end
     e_curr = compute_energy(ints, rdm1_dict, rdm2_dict, clusters, verbose=verbose)
     
-    if verbose > 1
+    if verbose > 0
         @printf(" CMF-CI Curr: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
     end
 
@@ -547,7 +377,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
         end
     end
 
-    function g2(kappa)
+    function g(kappa)
         norb = n_orb(ints)
         # println(" In g_analytic")
         K = unpack_gradient(kappa, norb)
@@ -566,7 +396,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
     #
     #   Define Gradient function
     #
-    function g(kappa)
+    function g2(kappa)
         norb = size(ints.h1)[1]
         # println(" In g_analytic")
         K = unpack_gradient(kappa, norb)
@@ -619,7 +449,7 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
         return gout
     end
 
-    if false
+    if false 
         grad1 = g_numerical(kappa)
         grad2 = g(kappa)
         grad3 = g2(kappa)
@@ -628,13 +458,6 @@ function cmf_oo(ints::InCoreInts, clusters::Vector{MOCluster}, fspace, dguess::R
         display(round.(unpack_gradient(grad3, norb),digits=6))
         error("nick") 
     end
-    #display("here:")
-    #gerr = g_numerical(kappa) - g(kappa)
-    #display(norm(gerr))
-    #for i in gerr
-    #    @printf(" err: %12.8f\n",i)
-    #end
-    #return
 
     if (method=="bfgs") || (method=="cg") || (method=="gd")
         optmethod = BFGS()
@@ -780,8 +603,6 @@ function orbital_gradient_analytical(ints, clusters, kappa, fspace, rdm::RDM1;
     # println(" In g_analytic")
     K = unpack_gradient(kappa, norb)
     U = exp(K)
-    #display("nick U")
-    #display(U)
     ints2 = orbital_rotation(ints,U)
     d1 = orbital_rotation(rdm,U)
 
@@ -841,15 +662,9 @@ function orbital_objective_function(ints, clusters, kappa, fspace, rdm::RDM1;
                                     sequential  = false,
                                     verbose     = 0)
 
-    #davg = .5*(da + db)
     norb = n_orb(ints)
     K = unpack_gradient(kappa, norb)
-    #U = Matrix(1.0I,norb,norb)
     U = exp(K)
-    #display("nick U")
-    #display(U)
-    #display("nick K")
-    #display(K)
     ints2 = orbital_rotation(ints,U)
     d1 = orbital_rotation(rdm,U)
     e, rdm1_dict, rdm2_dict = cmf_ci(ints2, clusters, fspace, d1, 

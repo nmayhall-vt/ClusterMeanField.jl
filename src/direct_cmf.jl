@@ -11,7 +11,7 @@ specified by a list of 1 and 2 particle rdms local to each cluster
 - `C::Matrix`: MO coefficients
 - `rdm1s`: dictionary (`ci.idx` => Array) of 1rdms from each cluster (spin summed)
 - `rdm2s`: dictionary (`ci.idx` => Array) of 2rdms from each cluster (spin summed)
-- `clusters::Vector{Cluster}`: vector of cluster objects
+- `clusters::Vector{MOCluster}`: vector of cluster objects
 
 return the total CMF energy
 """
@@ -42,7 +42,7 @@ function compute_cmf_energy(mol::Molecule, C::Matrix, rdm1s, rdm2s, clusters; ve
     end
     if verbose>1
         for ei = 1:length(e1)
-            @printf(" Cluster %3i E =%12.8f\n",ei,e1[ei])
+            @printf(" MOCluster %3i E =%12.8f\n",ei,e1[ei])
         end
     end
     e0 = get_nuclear_rep(mol)
@@ -62,7 +62,7 @@ This method forms the eri's on the fly to avoid global N^4 storage
 - `C`: MO coefficients for full system (spin restricted)
 - `rdm1a`: 1particle density matrix (alpha) 
 - `rdm1b`: 1particle density matrix (beta) 
-- `clusters::Vector{Cluster}`: vector of Cluster objects
+- `clusters::Vector{MOCluster}`: vector of MOCluster objects
 - `fspace::Vector{Vector{Int}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
 - `verbose`: how much to print
 - `ci_max_iter`: How many FCI iterations do we allow for each cluster. Default=40
@@ -116,7 +116,7 @@ end
 
 
 """
-    cmf_ci(mol::Molecule, C::Matrix, clusters::Vector{Cluster}, fspace::Vector, dguess; 
+    cmf_ci(mol::Molecule, C::Matrix, clusters::Vector{MOCluster}, fspace::Vector, dguess; 
             max_iter=10, dconv=1e-6, econv=1e-10, verbose=1)
 
 Optimize the 1RDM for CMF-CI, without requiring an InCoreInts object 
@@ -124,14 +124,14 @@ Optimize the 1RDM for CMF-CI, without requiring an InCoreInts object
 # Arguments
 - `mol::Molecule`: a Molecule type
 - `C`: MO coefficients for full system (spin restricted)
-- `clusters::Vector{Cluster}`: vector of Cluster objects
+- `clusters::Vector{MOCluster}`: vector of MOCluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
 - `dguess`: initial guess for 1particle density matrix (spin summed) 
 - `dconv`: Convergence threshold for change in density 
 - `econv`: Convergence threshold for change in energy 
 - `verbose`: how much to print
 """
-function cmf_ci(mol::Molecule, C::Matrix, clusters::Vector{Cluster}, fspace::Vector, in_rdm1a, in_rdm1b; 
+function cmf_ci(mol::Molecule, C::Matrix, clusters::Vector{MOCluster}, fspace::Vector, in_rdm1a, in_rdm1b; 
                 max_iter=10, dconv=1e-6, econv=1e-10, verbose=1,squential=false)
     #rdm1a = deepcopy(dguess)
     #rdm1b = deepcopy(dguess)
@@ -180,12 +180,12 @@ end
 
 
 """
-    cmf_oo(mol::Molecule, Cguess::Matrix, clusters::Vector{Cluster}, fspace, dguess; 
+    cmf_oo(mol::Molecule, Cguess::Matrix, clusters::Vector{MOCluster}, fspace, dguess; 
             max_iter_oo=100, max_iter_ci=100, gconv=1e-6, verbose=0, method="bfgs")
 
 Do CMF with orbital optimization with on the fly integrals
 """
-function cmf_oo(mol::Molecule, Cguess::Matrix, clusters::Vector{Cluster}, fspace, dguess; 
+function cmf_oo(mol::Molecule, Cguess::Matrix, clusters::Vector{MOCluster}, fspace, dguess; 
                 max_iter_oo=100, max_iter_ci=100, gconv=1e-6, verbose=0, method="bfgs")
     norb = size(Cguess)[2]
     

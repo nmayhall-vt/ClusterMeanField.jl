@@ -66,7 +66,8 @@ end
 
 Perform single CMF-CI iteration, returning new energy, and density
 """
-function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; verbose=1,sequential=false, spin_avg=true) where T
+function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; 
+                          use_pyscf=true, verbose=1, sequential=false, spin_avg=true) where T
     rdm1 = deepcopy(in_rdm1)
     rdm1_dict = Dict{Integer,RDM1{T}}()
     rdm2_dict = Dict{Integer,RDM2{T}}()
@@ -115,58 +116,60 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             #
             # run PYSCF FCI
             #e, d1a,d1b, d2 = pyscf_fci(ints_i,fspace[ci.idx][1],fspace[ci.idx][2], verbose=verbose)
-           
-            solver = SolverSettings(verbose=1)
-            solution = solve(ints_i, ansatz, solver)
-            d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
-       
-            verbose < 2 || display(solution)
-            
-            if spin_avg
-                v = solution.vectors[:,1]
-                v = reshape(v, (ansatz.dima, ansatz.dimb))
-                v = Matrix(v')
-                v = reshape(v, (ansatz.dima * ansatz.dimb, 1))
-        
-                ansatz_flipped = FCIAnsatz(length(ci), fspace[ci.idx][2],fspace[ci.idx][1])
-                solution_flipped = Solution(ansatz_flipped, solution.energies, v)
-                #solution_flipped = solve(ints_i, ansatz_flipped, solver)
-                _d1a, _d1b, _d2aa, _d2bb, _d2ab = compute_1rdm_2rdm(solution_flipped)
-               
-                d1a = (d1a + _d1a) * .5
-                d1b = (d1b + _d1b) * .5
-                d2aa = (d2aa + _d2aa) * .5
-                d2ab = (d2ab + _d2ab) * .5
-                d2bb = (d2bb + _d2bb) * .5
-            end
-            
-            d1 = RDM1(d1a, d1b)
-            d2 = RDM2(d2aa, d2ab, d2bb)
+          
+            if use_pyscf
+                pyscf = pyimport("pyscf")
+                fci = pyimport("pyscf.fci")
+                cisolver = pyscf.fci.direct_spin1.FCI()
+                cisolver.max_cycle = 100 
+                cisolver.conv_tol = 1e-8
+                nelec = na + nb
+                e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
+                (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
 
-#            pyscf = pyimport("pyscf")
-#            fci = pyimport("pyscf.fci")
-#            cisolver = pyscf.fci.direct_spin1.FCI()
-#            cisolver.max_cycle = 100 
-#            cisolver.conv_tol = 1e-8
-#            nelec = na + nb
-#            e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
-#            (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
-#
-#            d1 = RDM1(d1a, d1b)
-#            d2 = RDM2(d2aa, d2ab, d2bb)
+                d1 = RDM1(d1a, d1b)
+                d2 = RDM2(d2aa, d2ab, d2bb)
+            else
+                solver = SolverSettings(verbose=1)
+                solution = solve(ints_i, ansatz, solver)
+                d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
+
+                verbose < 2 || display(solution)
+
+                #            if spin_avg
+                #                v = solution.vectors[:,1]
+                #                v = reshape(v, (ansatz.dima, ansatz.dimb))
+                #                v = Matrix(v')
+                #                v = reshape(v, (ansatz.dima * ansatz.dimb, 1))
+                #        
+                #                ansatz_flipped = FCIAnsatz(length(ci), fspace[ci.idx][2],fspace[ci.idx][1])
+                #                solution_flipped = Solution(ansatz_flipped, solution.energies, v)
+                #                #solution_flipped = solve(ints_i, ansatz_flipped, solver)
+                #                _d1a, _d1b, _d2aa, _d2bb, _d2ab = compute_1rdm_2rdm(solution_flipped)
+                #               
+                #                d1a = (d1a + _d1a) * .5
+                #                d1b = (d1b + _d1b) * .5
+                #                d2aa = (d2aa + _d2aa) * .5
+                #                d2ab = (d2ab + _d2ab) * .5
+                #                d2bb = (d2bb + _d2bb) * .5
+                #            end
+
+                d1 = RDM1(d1a, d1b)
+                d2 = RDM2(d2aa, d2ab, d2bb)
+            end
 
         end
 
-#        if spin_avg
-#            d1.a .= .5*(d1.a + d1.b)
-#            d1.b .= d1.a
-#            d2.aa .= .5*(d2.aa + d2.bb)
-#            d2.bb .= d2.aa
-#            ab = reshape(d2.ab, (no*no, no*no))
-#            ab .= (ab .+ ab').*.5
-#            ab = reshape(ab, (no, no, no, no))
-#            #d2.ab .= ab
-#        end
+        if spin_avg
+            d1.a .= .5*(d1.a + d1.b)
+            d1.b .= d1.a
+            d2.aa .= .5*(d2.aa + d2.bb)
+            d2.bb .= d2.aa
+            ab = reshape(d2.ab, (no*no, no*no))
+            ab .= (ab .+ ab').*.5
+            ab = reshape(ab, (no, no, no, no))
+            d2.ab .= ab
+        end
         
         rdm1_dict[ci.idx] = d1
         rdm2_dict[ci.idx] = d2

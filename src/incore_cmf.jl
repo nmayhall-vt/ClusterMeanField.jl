@@ -369,17 +369,10 @@ function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess
         end
     end
 
-    if (method=="bfgs") || (method=="cg") || (method=="gd")
+    if (method=="bfgs") || (method=="cg")
         optmethod = BFGS()
         if method=="cg"
             optmethod = ConjugateGradient()
-        elseif method=="gd"
-
-            if alpha == nothing
-                optmethod = GradientDescent()
-            else 
-                optmethod = GradientDescent(alphaguess=alpha)
-            end
         end
 
         options = Optim.Options(
@@ -400,12 +393,19 @@ function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess
         d1 = orbital_rotation(d1_curr, U)
         return e, U, d1
 
+    elseif method=="gd"
+        res = do_gd(f, g, callback, kappa, gconv, max_iter_oo, method)
     elseif method=="diis"
         res = do_diis(f, g, callback, kappa, gconv, max_iter_oo, method)
     end
 
 end
 
+
+
+function do_gd(f, g, callback, kappa, gconv,max_iter, method)
+    throw("Not yet implemented")
+end
 
 
 function do_diis(f,g,callback,kappa, gconv,max_iter, method)
@@ -545,4 +545,84 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, d::RDM1;
     return grad
 end
 
+"""
+    cmf_oo_gd(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                max_iter_oo=100, 
+                max_iter_ci=100, 
+                gconv=1e-6, 
+                verbose=0, 
+                method="fixed", 
+                alpha=nothing,
+                sequential=false) where T
 
+Do CMF with orbital optimization
+
+#Arguments
+- `ints::InCoreInts`: integrals for full system
+- `clusters::Vector{MOCluster}`: vector of cluster objects
+- `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `dguess_a`: initial guess for 1particle density matrix
+- `max_iter_oo`: Max iter for the orbital optimization iterations 
+- `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
+- `gconv`: Convergence threshold for change in gradient of energy 
+- `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
+- `verbose`: Printing level 
+- `method`: optimization method
+"""
+function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                max_iter_oo=100, 
+                max_iter_ci=100, 
+                gconv=1e-6, 
+                verbose=0, 
+                method="bfgs", 
+                alpha=.1,
+                sequential=false) where T
+    
+    ints = deepcopy(ints_in)
+    norb = n_orb(ints)
+    d1   = deepcopy(dguess) 
+    U    = Matrix(1.0I, norb, norb)
+    e    = 0.0
+
+    function step!(ints, d1, k)
+        norb = n_orb(ints)
+        K = unpack_gradient(k, norb)
+        Ui = exp(K)
+        
+        tmp = orbital_rotation(ints,Ui)
+        ints.h1 .= tmp.h1
+        ints.h2 .= tmp.h2
+
+        tmp = orbital_rotation(d1,Ui)
+        d1.a .= tmp.a
+        d1.b .= tmp.b
+
+        e, rdm1_dict, rdm2_dict = cmf_ci(ints, clusters, fspace, d1, 
+                                         dconv=gconv/10.0, verbose=0, sequential=sequential)
+        
+        gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
+        g = build_orbital_gradient(ints, gd1, gd2)
+        return e, g, Ui, gd1
+    end
+
+
+    # Compute initial gradient
+    converged = false
+    step_i = zeros(norb*(norb-1)÷2) 
+    for i in 1:max_iter_oo
+        ei, gi, Ui, d1 = step!(ints, d1, step_i)
+        step_i = -alpha*gi
+        e = ei
+        U = U*Ui
+
+        converged = norm(gi) < gconv 
+        if converged
+            @printf("*Step: %4i E: %16.12f G: %4.1e\n", i, ei, norm(gi)) 
+            break
+        else
+            @printf(" Step: %4i E: %16.12f G: %4.1e\n", i, ei, norm(gi)) 
+        end
+    end
+
+    return e, U, d1 
+end

@@ -577,7 +577,7 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
                 method="bfgs", 
                 alpha=.1,
                 sequential=false) where T
-    
+    #={{{=#
     ints = deepcopy(ints_in)
     norb = n_orb(ints)
     d1   = deepcopy(dguess) 
@@ -625,4 +625,161 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
     end
 
     return e, U, d1 
+#=}}}=#
+end
+
+function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                max_iter_oo         = 100, 
+                max_iter_ci         = 100, 
+                gconv               = 1e-6, 
+                verbose             = 0, 
+                max_ss_size         = 8, 
+                diis_start          = 1,
+                alpha               = .1,
+                sequential          = false
+                ) where T
+    #={{{=#
+    println(" Solve OO-CMF with DIIS")
+    ints = deepcopy(ints_in)
+    norb = n_orb(ints)
+    e    = 0.0
+    U    = zeros(T, norb, norb)
+    d1   = deepcopy(dguess) 
+    norb2 = norb*(norb-1)÷2
+
+    nss   = 0
+    k_ss  = zeros(T,norb2,0)
+    g_ss  = zeros(T,norb2,0)
+    converged = false
+
+    function step!(k)
+        K = unpack_gradient(k, norb)
+        Ui = exp(K)
+        
+        ints_i = orbital_rotation(ints,Ui)
+        d1_i = orbital_rotation(d1,Ui)
+
+        e_i, rdm1_dict, rdm2_dict = cmf_ci(ints_i, clusters, fspace, d1_i, 
+                                         dconv=gconv/10.0, verbose=0, sequential=sequential)
+        d1_i, d2_i = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
+        
+        d1_i = orbital_rotation(d1_i, Ui')
+        d2_i = orbital_rotation(d2_i, Ui')
+        g_i = build_orbital_gradient(ints, d1_i, d2_i)
+        
+        #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
+        #println(" g_i 1")
+        #display(g_i)
+        #g_i = pack_gradient(U'*unpack_gradient(g_i, norb)*U, norb)
+        #println(" g_i 2")
+        #display(g_i)
+        e = e_i
+        U = Ui
+        return e_i, g_i, d1_i
+    end
+    
+    # First step
+    e_i, g_i, d1_i = step!(zeros(norb2))
+    k_i = zeros(norb2)
+        
+    #g_i = reshape(g_i, (norb2,1))
+    #k_i = reshape(k_i, (norb2,1))
+    #g_ss = hcat(g_ss, g_i)
+    #k_ss = hcat(k_ss, k_i)
+    nss = size(g_ss,2)
+
+    for i in 1:max_iter_oo
+    
+        k_i = k_i - alpha*g_i
+       
+        if nss < max_ss_size
+            nss += 1
+            g_ss = hcat(g_ss, g_i)
+            k_ss = hcat(k_ss, k_i)
+        else
+            g_ss[:,1:end-1] .= g_ss[:,2:end]
+            k_ss[:,1:end-1] .= k_ss[:,2:end]
+            
+            g_ss[:,nss] .= g_i
+            k_ss[:,nss] .= k_i
+        end
+            
+        @assert nss == size(g_ss,2)
+        
+        if i >= diis_start 
+            steptype = "diis"
+        
+            B = zeros(T,nss+1,nss+1)
+            B[1:nss, 1:nss] .= g_ss'*g_ss
+            B[nss+1, :] .= -1 
+            B[:, nss+1] .= -1 
+            B[nss+1, nss+1] = 0 
+
+            # Normalize
+            Bmax  = max.(abs.(B[1:nss, 1:nss])...)
+            B[1:nss, 1:nss] ./= Bmax
+
+            verbose < 2 || println("B")
+            verbose < 2 || display(B)
+            #display(cond(B))
+
+            #while cond(B) > 1e12
+            #    B = B[2:end, 2:end]
+            #    k_ss = k_ss[:,2:end]
+            #    g_ss = g_ss[:,2:end]
+            #    nss -= 1
+            #end
+
+            b = zeros(T,nss+1)
+            b[nss+1] = -1
+            #println("b")
+            #display(b)
+
+            x = pinv(B)*b
+            verbose < 2 || println("x")
+            verbose < 2 || display(x)
+           
+            # new step:
+            k_i = k_ss * x[1:nss]
+            g_i = g_ss * x[1:nss]
+            #display(norm(g_i))
+            verbose < 2 || println("k")
+            verbose < 2 || display(k_i)
+            verbose < 2 || println("g (approx)")
+            verbose < 2 || display(norm(g_i))
+
+            verbose < 2 || println(" k")
+            verbose < 2 || display(k_ss)
+            verbose < 2 || println(" g")
+            verbose < 2 || display(g_ss)
+        end
+       
+        # 
+        # Compute energy and gradient
+        #
+        e_i, g_i, d1_i = step!(k_i)
+        g_i = reshape(g_i, (norb2,1))
+        k_i = reshape(k_i, (norb2,1))
+        d_i = d1_i
+        # take gradient to be error vector
+            
+        
+        if norm(g_i) < gconv
+            @printf("*ooCMF Iter: %4i Total= %16.12f G= %12.2e #SS: %4s\n", i, e_i, norm(g_i), nss)
+            break
+        end
+
+        #g_ss = hcat(g_ss, g_i)
+        #k_ss = hcat(k_ss, k_i)
+        #nss = size(g_ss,2)
+
+       
+
+        @printf(" ooCMF Iter: %4i Total= %16.12f G= %12.2e #SS: %4s\n", i, e_i, norm(g_i), nss)
+    end
+
+    U = exp(unpack_gradient(k_i,norb))
+    d1 = orbital_rotation(d1_i, U)
+    return e, U, d1
+#=}}}=#
 end

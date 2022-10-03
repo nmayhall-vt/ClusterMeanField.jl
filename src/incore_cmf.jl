@@ -628,10 +628,41 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
 #=}}}=#
 end
 
+"""
+    cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                max_iter_oo         = 100, 
+                max_iter_ci         = 100, 
+                conv_oo             = 1e-6, 
+                conv_ci             = 1e-8, 
+                verbose             = 0, 
+                max_ss_size         = 8, 
+                diis_start          = 1,
+                alpha               = .1,
+                sequential          = false
+                ) where T
+
+Do CMF with orbital optimization
+
+#Arguments
+- `ints::InCoreInts`: integrals for full system
+- `clusters::Vector{MOCluster}`: vector of cluster objects
+- `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `dguess`: initial guess for 1particle density matrix
+- `max_iter_oo`: Max iter for the orbital optimization iterations 
+- `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
+- `conv_oo`: Convergence threshold for orbital gradient 
+- `conv_ci`: Convergence threshold for cluster CI 
+- `max_ss_size`: Max DIIS subspace size 
+- `diis_start`: When to start DIIS iterations
+- `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
+- `alpha`: stepsize for gradient step (needs replaced with hessian)
+- `verbose`: Printing level 
+"""
 function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
                 max_iter_oo         = 100, 
                 max_iter_ci         = 100, 
-                gconv               = 1e-6, 
+                conv_oo             = 1e-6, 
+                conv_ci             = 1e-8, 
                 verbose             = 0, 
                 max_ss_size         = 8, 
                 diis_start          = 1,
@@ -660,19 +691,15 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         d1_i = orbital_rotation(d1,Ui)
 
         e_i, rdm1_dict, rdm2_dict = cmf_ci(ints_i, clusters, fspace, d1_i, 
-                                         dconv=gconv/10.0, verbose=0, sequential=sequential)
+                                         dconv=conv_ci, 
+                                         verbose=0, 
+                                         sequential=sequential)
         d1_i, d2_i = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
         
         d1_i = orbital_rotation(d1_i, Ui')
         d2_i = orbital_rotation(d2_i, Ui')
         g_i = build_orbital_gradient(ints, d1_i, d2_i)
         
-        #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
-        #println(" g_i 1")
-        #display(g_i)
-        #g_i = pack_gradient(U'*unpack_gradient(g_i, norb)*U, norb)
-        #println(" g_i 2")
-        #display(g_i)
         e = e_i
         U = Ui
         return e_i, g_i, d1_i
@@ -764,7 +791,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         # take gradient to be error vector
             
         
-        if norm(g_i) < gconv
+        if norm(g_i) < conv_oo
             @printf("*ooCMF Iter: %4i Total= %16.12f G= %12.2e #SS: %4s\n", i, e_i, norm(g_i), nss)
             break
         end

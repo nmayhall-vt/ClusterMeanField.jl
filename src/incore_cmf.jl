@@ -667,7 +667,8 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
                 max_ss_size         = 8, 
                 diis_start          = 1,
                 alpha               = .1,
-                sequential          = false
+                sequential          = false,
+                zero_intra_rots     = true 
                 ) where T
     #={{{=#
     println(" Solve OO-CMF with DIIS")
@@ -682,6 +683,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
     k_ss  = zeros(T,norb2,0)
     g_ss  = zeros(T,norb2,0)
     converged = false
+    condB = 0.0
 
     function step!(k)
         K = unpack_gradient(k, norb)
@@ -699,7 +701,14 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         d1_i = orbital_rotation(d1_i, Ui')
         d2_i = orbital_rotation(d2_i, Ui')
         g_i = build_orbital_gradient(ints, d1_i, d2_i)
-        
+       
+        if zero_intra_rots
+            g_i = unpack_gradient(g_i, norb)
+            for ci in clusters
+                g_i[ci.orb_list, ci.orb_list] .= 0
+            end
+            g_i = pack_gradient(g_i, norb)
+        end
         e = e_i
         U = Ui
         return e_i, g_i, d1_i
@@ -730,6 +739,20 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
             g_ss[:,nss] .= g_i
             k_ss[:,nss] .= k_i
         end
+
+        # Check for linear dependence
+#        tmp = 1*g_ss
+#
+#        for i in 1:nss
+#            tmp[:,i] ./= norm(tmp[:,i])
+#        end
+#        nvecs = 0
+#        for si in svdvals(tmp)
+#            if si > 1e-12
+#                nvecs += 1
+#            end
+#        end
+
             
         @assert nss == size(g_ss,2)
         
@@ -748,7 +771,6 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
 
             verbose < 2 || println("B")
             verbose < 2 || display(B)
-            #display(cond(B))
 
             #while cond(B) > 1e12
             #    B = B[2:end, 2:end]
@@ -779,6 +801,15 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
             verbose < 2 || display(k_ss)
             verbose < 2 || println(" g")
             verbose < 2 || display(g_ss)
+        end
+       
+        if zero_intra_rots
+            # Remove intracluster rotations
+            k_i = unpack_gradient(k_i, norb)
+            for ci in clusters
+                k_i[ci.orb_list, ci.orb_list] .= 0
+            end
+            k_i = pack_gradient(k_i, norb)
         end
        
         # 

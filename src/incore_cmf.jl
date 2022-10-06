@@ -62,12 +62,25 @@ end
 
 
 """
-    cmf_ci_iteration(ints::InCoreInts, clusters::Vector{MOCluster}, rdm1a, rdm1b, fspace; verbose=1)
+    cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; 
+                          use_pyscf = true, 
+                          verbose   = 1, 
+                          sequential= false, 
+                          spin_avg  = true, 
+                          tol_ci    = 1e-8,
+                          maxiter_ci    = 100
+    ) where T
 
 Perform single CMF-CI iteration, returning new energy, and density
 """
 function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; 
-                          use_pyscf=true, verbose=1, sequential=false, spin_avg=true) where T
+                          use_pyscf = true, 
+                          verbose   = 1, 
+                          sequential= false, 
+                          spin_avg  = true, 
+                          tol_ci    = 1e-8,
+                          maxiter_ci    = 100
+    ) where T
     rdm1 = deepcopy(in_rdm1)
     rdm1_dict = Dict{Integer,RDM1{T}}()
     rdm2_dict = Dict{Integer,RDM2{T}}()
@@ -121,8 +134,10 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
                 pyscf = pyimport("pyscf")
                 fci = pyimport("pyscf.fci")
                 cisolver = pyscf.fci.direct_spin1.FCI()
-                cisolver.max_cycle = 100 
-                cisolver.conv_tol = 1e-8
+                cisolver.max_cycle = maxiter_ci 
+                cisolver.conv_tol = tol_ci
+                cisolver.conv_tol_residual = tol_ci
+                #cisolver.lindep = 1e-8
                 nelec = na + nb
                 e, vfci = cisolver.kernel(ints_i.h1, ints_i.h2, no, (na,nb), ecore=ints_i.h0)
                 (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(vfci, no, (na,nb))
@@ -130,7 +145,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
                 d1 = RDM1(d1a, d1b)
                 d2 = RDM2(d2aa, d2ab, d2bb)
             else
-                solver = SolverSettings(verbose=1)
+                solver = SolverSettings(verbose=1, tol=tol_ci, maxiter=maxiter_ci)
                 solution = solve(ints_i, ansatz, solver)
                 d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
 
@@ -191,8 +206,13 @@ end
 
 
 """
-    cmf_ci(ints, clusters, fspace, in_rdm1a, in_rdm1b; 
-                max_iter=10, dconv=1e-6, econv=1e-10, verbose=1,sequential=false)
+    cmf_ci(ints, clusters, fspace, in_rdm1::RDM1; 
+                maxiter_ci  = 100, 
+                maxiter_d1  = 20, 
+                tol_d1      = 1e-6, 
+                tol_ci      = 1e-8, 
+                verbose     = 1,
+                sequential  = false)
 
 Optimize the 1RDM for CMF-CI
 
@@ -200,15 +220,26 @@ Optimize the 1RDM for CMF-CI
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
-- `in_rdm1a`: initial guess for 1particle density matrix for alpha electrons
-- `in_rdm1b`: initial guess for 1particle density matrix for beta electrons
-- `dconv`: Convergence threshold for change in density 
-- `econv`: Convergence threshold for change in energy 
+- `in_rdm1`: initial guess for 1particle density matrix
+- `tol_d1`: Convergence threshold for change in density 
+- `tol_ci`: Convergence threshold for the cluster CI problems 
+- `maxiter_d1`: Max number of iterations for density optimization
+- `maxiter_ci`: Max number of iterations for CI diagonalization
 - `sequential`: Use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
+    
+# Returns
+- `e`: Energy
+- `rdm1_dict`: Dictionary of 1RDMs; cluster index --> RDM1
+- `rdm2_dict`: Dictionary of 2RDMs; cluster index --> RDM2
 """
 function cmf_ci(ints, clusters, fspace, in_rdm1::RDM1; 
-                max_iter=10, dconv=1e-6, econv=1e-10, verbose=1,sequential=false)
+                maxiter_ci  = 100, 
+                maxiter_d1  = 20, 
+                tol_d1      = 1e-6, 
+                tol_ci      = 1e-8, 
+                verbose     = 1,
+                sequential  = false)
     rdm1 = deepcopy(in_rdm1)
     energies = []
     e_prev = 0
@@ -218,14 +249,19 @@ function cmf_ci(ints, clusters, fspace, in_rdm1::RDM1;
     rdm1_dict = Dict{Integer,Array}()
     rdm2_dict = Dict{Integer,Array}()
     # rdm2_dict = Dict{Integer, Array}()
-    for iter = 1:max_iter
+    for iter = 1:maxiter_d1
         if verbose > 1
             println()
             println(" ------------------------------------------ ")
             println(" CMF CI Iter: ", iter)
             println(" ------------------------------------------ ")
         end
-        e_curr, rdm1_dict, rdm2_dict = cmf_ci_iteration(ints, clusters, rdm1, fspace, verbose=verbose,sequential=sequential)
+        e_curr, rdm1_dict, rdm2_dict = cmf_ci_iteration(ints, clusters, rdm1, fspace, 
+                                                        maxiter_ci  = maxiter_ci,
+                                                        tol_ci      = tol_ci,
+                                                        verbose     = verbose,
+                                                        sequential  = sequential
+                                                       )
         rdm1_curr = assemble_full_rdm(clusters, rdm1_dict)
 
         append!(energies,e_curr)
@@ -237,7 +273,7 @@ function cmf_ci(ints, clusters, fspace, in_rdm1::RDM1;
         end
         e_prev = e_curr*1
         rdm1 = rdm1_curr
-        if (abs(d_err) < dconv) && (abs(e_err) < econv)
+        if d_err < tol_d1 
             if verbose>1
                 @printf("*CMF-CI: Elec %12.8f Total %12.8f\n", e_curr-ints.h0, e_curr)
             end
@@ -322,7 +358,9 @@ function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess
         U = exp(K)
         ints_tmp = orbital_rotation(ints,U)
         e, rdm1_dict, _ = cmf_ci(ints_tmp, clusters, fspace, orbital_rotation(d1_curr, U), 
-                                         dconv=gconv/10.0, verbose=0, sequential=sequential)
+                                         tol_d1=gconv/10.0, 
+                                         verbose=0, 
+                                         sequential=sequential)
         
         d1_tmp = assemble_full_rdm(clusters, rdm1_dict)
         d1_tmp = orbital_rotation(d1_tmp, U')
@@ -341,7 +379,7 @@ function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess
        
         ints_tmp = orbital_rotation(ints,U)
         e, rdm1_dict, rdm2_dict = cmf_ci(ints_tmp, clusters, fspace, orbital_rotation(d1_curr,U), 
-                                         dconv=gconv/10.0, verbose=verbose)
+                                         tol_d1=gconv/10.0, verbose=verbose)
 
         gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
         gout = build_orbital_gradient(ints_tmp, gd1, gd2)
@@ -546,37 +584,53 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, d::RDM1;
 end
 
 """
-    cmf_oo_gd(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
-                max_iter_oo=100, 
-                max_iter_ci=100, 
-                gconv=1e-6, 
-                verbose=0, 
-                method="fixed", 
-                alpha=nothing,
-                sequential=false) where T
+    cmf_oo_gd( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                    maxiter_oo      = 100, 
+                    maxiter_ci      = 100, 
+                    maxiter_d1      = 100, 
+                    tol_oo          = 1e-6, 
+                    tol_d1          = 1e-7, 
+                    tol_ci          = 1e-8, 
+                    verbose         = 0, 
+                    alpha           = .1,
+                    zero_intra_rots = true,
+                    sequential      = false) where T
 
 Do CMF with orbital optimization
 
-#Arguments
+# Arguments
+
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
-- `dguess_a`: initial guess for 1particle density matrix
-- `max_iter_oo`: Max iter for the orbital optimization iterations 
-- `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
-- `gconv`: Convergence threshold for change in gradient of energy 
+- `dguess`: initial guess for 1particle density matrix
+- `maxiter_oo`: Max iter for the orbital optimization iterations 
+- `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
+- `maxiter_ci`: Max iter for the CI diagonalization of the cluster states 
+- `tol_oo`: Convergence threshold for change in orbital gradient 
+- `tol_ci`: Convergence threshold for the cluster CI problems 
+- `tol_d1`: Convergence threshold for the CMF 1RDM 
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
-- `method`: optimization method
+
+# Returns
+
+- `e`: Energy
+- `U::Matrix`: Orbital rotation matrix from input to output orbitals
+- `d1::RDM1`: Optimized 1RDM in the optimized orbital basis
 """
-function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
-                max_iter_oo=100, 
-                max_iter_ci=100, 
-                gconv=1e-6, 
-                verbose=0, 
-                method="bfgs", 
-                alpha=.1,
-                sequential=false) where T
+function cmf_oo_gd( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                    maxiter_oo      = 100, 
+                    maxiter_ci      = 100, 
+                    maxiter_d1      = 100, 
+                    tol_oo          = 1e-6, 
+                    tol_d1          = 1e-7, 
+                    tol_ci          = 1e-8, 
+                    verbose         = 0, 
+                    alpha           = .1,
+                    zero_intra_rots = true,
+                    sequential      = false
+    ) where T
     #={{{=#
     ints = deepcopy(ints_in)
     norb = n_orb(ints)
@@ -587,6 +641,13 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
     function step!(ints, d1, k)
         norb = n_orb(ints)
         K = unpack_gradient(k, norb)
+        if zero_intra_rots
+            # Remove intracluster rotations
+            for ci in clusters
+                K[ci.orb_list, ci.orb_list] .= 0
+            end
+        end
+       
         Ui = exp(K)
         
         tmp = orbital_rotation(ints,Ui)
@@ -598,7 +659,12 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
         d1.b .= tmp.b
 
         e, rdm1_dict, rdm2_dict = cmf_ci(ints, clusters, fspace, d1, 
-                                         dconv=gconv/10.0, verbose=0, sequential=sequential)
+                                         maxiter_d1 = maxiter_d1, 
+                                         maxiter_ci = maxiter_ci, 
+                                         tol_d1     = tol_d1, 
+                                         tol_ci     = tol_ci, 
+                                         verbose    = 0, 
+                                         sequential = sequential)
         
         gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
         g = build_orbital_gradient(ints, gd1, gd2)
@@ -609,13 +675,13 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
     # Compute initial gradient
     converged = false
     step_i = zeros(norb*(norb-1)÷2) 
-    for i in 1:max_iter_oo
+    for i in 1:maxiter_oo
         ei, gi, Ui, d1 = step!(ints, d1, step_i)
         step_i = -alpha*gi
         e = ei
         U = U*Ui
 
-        converged = norm(gi) < gconv 
+        converged = norm(gi) < tol_oo 
         if converged
             @printf("*Step: %4i E: %16.12f G: %4.1e\n", i, ei, norm(gi)) 
             break
@@ -629,47 +695,62 @@ function cmf_oo_gd(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, 
 end
 
 """
-    cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
-                max_iter_oo         = 100, 
-                max_iter_ci         = 100, 
-                conv_oo             = 1e-6, 
-                conv_ci             = 1e-8, 
-                verbose             = 0, 
-                max_ss_size         = 8, 
-                diis_start          = 1,
-                alpha               = .1,
-                sequential          = false
-                ) where T
+    cmf_oo_diis( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                    maxiter_oo      = 100, 
+                    maxiter_ci      = 100, 
+                    maxiter_d1      = 100, 
+                    tol_oo          = 1e-6, 
+                    tol_d1          = 1e-7, 
+                    tol_ci          = 1e-8, 
+                    verbose         = 0, 
+                    max_ss_size     = 8, 
+                    diis_start      = 1,
+                    alpha           = .1,
+                    zero_intra_rots = true 
+                    sequential      = false
+                    ) where T
 
-Do CMF with orbital optimization
+Do CMF with orbital optimization using DIIS
 
-#Arguments
+# Arguments
+
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
 - `dguess`: initial guess for 1particle density matrix
-- `max_iter_oo`: Max iter for the orbital optimization iterations 
-- `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
-- `conv_oo`: Convergence threshold for orbital gradient 
-- `conv_ci`: Convergence threshold for cluster CI 
-- `max_ss_size`: Max DIIS subspace size 
-- `diis_start`: When to start DIIS iterations
+- `maxiter_oo`: Max iter for the orbital optimization iterations 
+- `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
+- `maxiter_ci`: Max iter for the CI diagonalization of the cluster states 
+- `tol_oo`: Convergence threshold for change in orbital gradient 
+- `tol_ci`: Convergence threshold for the cluster CI problems 
+- `tol_d1`: Convergence threshold for the CMF 1RDM 
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
-- `alpha`: stepsize for gradient step (needs replaced with hessian)
 - `verbose`: Printing level 
+- `max_ss_size`: Max number of DIIS vectors
+- `diis_start`: When to start doing DIIS extrapolations
+- `alpha`: New vector added to ss is k=-alpha*g where g is the orbital gradient. This should be improved with Hessian.
+- `zero_intra_rots`: Should we zero out rotations within a cluster? Helps with FCI solvers which should have zero gradients.
+
+# Returns
+
+- `e`: Energy
+- `U::Matrix`: Orbital rotation matrix from input to output orbitals
+- `d1::RDM1`: Optimized 1RDM in the optimized orbital basis
 """
 function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
-                max_iter_oo         = 100, 
-                max_iter_ci         = 100, 
-                conv_oo             = 1e-6, 
-                conv_ci             = 1e-8, 
-                verbose             = 0, 
-                max_ss_size         = 8, 
-                diis_start          = 1,
-                alpha               = .1,
-                sequential          = false,
-                zero_intra_rots     = true 
-                ) where T
+                    maxiter_oo      = 100, 
+                    maxiter_ci      = 100, 
+                    maxiter_d1      = 100, 
+                    tol_oo          = 1e-6, 
+                    tol_d1          = 1e-7, 
+                    tol_ci          = 1e-8, 
+                    verbose         = 0, 
+                    max_ss_size     = 8, 
+                    diis_start      = 1,
+                    alpha           = .1,
+                    zero_intra_rots = true,
+                    sequential      = false
+    ) where T
     #={{{=#
     println(" Solve OO-CMF with DIIS")
     ints = deepcopy(ints_in)
@@ -693,14 +774,18 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         d1_i = orbital_rotation(d1,Ui)
 
         e_i, rdm1_dict, rdm2_dict = cmf_ci(ints_i, clusters, fspace, d1_i, 
-                                         dconv=conv_ci, 
-                                         verbose=0, 
-                                         sequential=sequential)
+                                         maxiter_d1 = maxiter_d1, 
+                                         maxiter_ci = maxiter_ci, 
+                                         tol_d1     = tol_d1, 
+                                         tol_ci     = tol_ci, 
+                                         verbose    = 0, 
+                                         sequential = sequential)
         d1_i, d2_i = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
         
         d1_i = orbital_rotation(d1_i, Ui')
         d2_i = orbital_rotation(d2_i, Ui')
         g_i = build_orbital_gradient(ints, d1_i, d2_i)
+        #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
        
         if zero_intra_rots
             g_i = unpack_gradient(g_i, norb)
@@ -724,7 +809,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
     #k_ss = hcat(k_ss, k_i)
     nss = size(g_ss,2)
 
-    for i in 1:max_iter_oo
+    for i in 1:maxiter_oo
     
         k_i = k_i - alpha*g_i
        
@@ -741,17 +826,18 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         end
 
         # Check for linear dependence
-#        tmp = 1*g_ss
-#
-#        for i in 1:nss
-#            tmp[:,i] ./= norm(tmp[:,i])
-#        end
-#        nvecs = 0
-#        for si in svdvals(tmp)
-#            if si > 1e-12
-#                nvecs += 1
-#            end
-#        end
+        #tmp = 1*g_ss
+        #
+        #for i in 1:nss
+        #    tmp[:,i] ./= norm(tmp[:,i])
+        #end
+        #nvecs = 0
+        #for si in svdvals(tmp)
+        #    println(si)
+        #    if si > 1e-12
+        #        nvecs += 1
+        #    end
+        #end
 
             
         @assert nss == size(g_ss,2)
@@ -771,13 +857,6 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
 
             verbose < 2 || println("B")
             verbose < 2 || display(B)
-
-            #while cond(B) > 1e12
-            #    B = B[2:end, 2:end]
-            #    k_ss = k_ss[:,2:end]
-            #    g_ss = g_ss[:,2:end]
-            #    nss -= 1
-            #end
 
             b = zeros(T,nss+1)
             b[nss+1] = -1
@@ -822,7 +901,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         # take gradient to be error vector
             
         
-        if norm(g_i) < conv_oo
+        if norm(g_i) < tol_oo 
             @printf("*ooCMF Iter: %4i Total= %16.12f G= %12.2e #SS: %4s\n", i, e_i, norm(g_i), nss)
             break
         end

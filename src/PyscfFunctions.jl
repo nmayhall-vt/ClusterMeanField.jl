@@ -19,7 +19,11 @@ function pyscf_do_scf(molecule::Molecule; conv_tol=1e-10, verbose=0)
     println(pymol.basis)
     #pymol.max_memory = 1000 # MB
     #pymol.symmetry = true
-    mf = pyscf.scf.RHF(pymol).run(conv_tol=conv_tol, verbose=verbose)
+    if molecule.multiplicity == 1
+        mf = pyscf.scf.RHF(pymol).run(conv_tol=conv_tol, verbose=verbose)
+    else
+        mf = pyscf.scf.ROHF(pymol).run(conv_tol=conv_tol, verbose=verbose)
+    end
     enu = mf.energy_nuc()
     println("MO Energies")
     display(mf.mo_energy)

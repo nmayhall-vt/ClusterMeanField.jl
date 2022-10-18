@@ -72,14 +72,16 @@ end
     ) where T
 
 Perform single CMF-CI iteration, returning new energy, and density
+                          
+# Arguments
 """
 function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; 
-                          use_pyscf = true, 
-                          verbose   = 1, 
-                          sequential= false, 
-                          spin_avg  = true, 
-                          tol_ci    = 1e-8,
-                          maxiter_ci    = 100
+                          use_pyscf  = true, 
+                          verbose    = 1, 
+                          sequential = false, 
+                          spin_avg   = true, 
+                          tol_ci     = 1e-8,
+                          maxiter_ci = 100,
     ) where T
     rdm1 = deepcopy(in_rdm1)
     rdm1_dict = Dict{Integer,RDM1{T}}()
@@ -151,24 +153,6 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
 
                 verbose < 2 || display(solution)
 
-                #            if spin_avg
-                #                v = solution.vectors[:,1]
-                #                v = reshape(v, (ansatz.dima, ansatz.dimb))
-                #                v = Matrix(v')
-                #                v = reshape(v, (ansatz.dima * ansatz.dimb, 1))
-                #        
-                #                ansatz_flipped = FCIAnsatz(length(ci), fspace[ci.idx][2],fspace[ci.idx][1])
-                #                solution_flipped = Solution(ansatz_flipped, solution.energies, v)
-                #                #solution_flipped = solve(ints_i, ansatz_flipped, solver)
-                #                _d1a, _d1b, _d2aa, _d2bb, _d2ab = compute_1rdm_2rdm(solution_flipped)
-                #               
-                #                d1a = (d1a + _d1a) * .5
-                #                d1b = (d1b + _d1b) * .5
-                #                d2aa = (d2aa + _d2aa) * .5
-                #                d2ab = (d2ab + _d2ab) * .5
-                #                d2bb = (d2bb + _d2bb) * .5
-                #            end
-
                 d1 = RDM1(d1a, d1b)
                 d2 = RDM2(d2aa, d2ab, d2bb)
             end
@@ -234,6 +218,7 @@ Optimize the 1RDM for CMF-CI
 - `rdm2_dict`: Dictionary of 2RDMs; cluster index --> RDM2
 """
 function cmf_ci(ints, clusters, fspace, in_rdm1::RDM1; 
+                use_pyscf       = true,
                 maxiter_ci  = 100, 
                 maxiter_d1  = 20, 
                 tol_d1      = 1e-6, 
@@ -260,7 +245,8 @@ function cmf_ci(ints, clusters, fspace, in_rdm1::RDM1;
                                                         maxiter_ci  = maxiter_ci,
                                                         tol_ci      = tol_ci,
                                                         verbose     = verbose,
-                                                        sequential  = sequential
+                                                        sequential  = sequential,
+                                                        use_pyscf   = use_pyscf
                                                        )
         rdm1_curr = assemble_full_rdm(clusters, rdm1_dict)
 
@@ -738,6 +724,7 @@ Do CMF with orbital optimization using DIIS
 - `d1::RDM1`: Optimized 1RDM in the optimized orbital basis
 """
 function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
+                    use_pyscf       = true,
                     maxiter_oo      = 100, 
                     maxiter_ci      = 100, 
                     maxiter_d1      = 100, 

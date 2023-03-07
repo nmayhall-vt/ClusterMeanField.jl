@@ -75,7 +75,7 @@ end
 Perform single CMF-CI iteration, returning new energy, and density
 """
 function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_rdm1::RDM1{T}, fspace; 
-                          use_pyscf = false, 
+                          use_pyscf = true, 
                           verbose   = 1, 
                           sequential= false, 
                           spin_avg  = true, 
@@ -1299,7 +1299,8 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
                     max_ss_size     = 8, 
                     diis_start      = 1,
                     alpha           = .1,
-                    zero_intra_rots = true,
+                    #zero_intra_rots = true,
+                    zero_intra_rots = false,
                     sequential      = false
     ) where T
     #={{{=#

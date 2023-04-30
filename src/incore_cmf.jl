@@ -115,15 +115,11 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
                 db = Matrix(1.0I, no, no)
             end
             
-            if spin_avg
-                da = .5*(da + db)
-                db .= da
-            end
-
             d1 = RDM1(da,db)
             d2 = RDM2(d1)
             
             e = compute_energy(ints_i, d1)
+            
             verbose < 2 || @printf(" Slater Det Energy: %12.8f\n", e)
         else
             #

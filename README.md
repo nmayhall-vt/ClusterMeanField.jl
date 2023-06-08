@@ -1,7 +1,10 @@
 # ClusterMeanField
-
 [![Build Status](https://github.com/nmayhall-vt/ClusterMeanField.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/nmayhall-vt/ClusterMeanField.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/nmayhall-vt/ClusterMeanField.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/nmayhall-vt/ClusterMeanField.jl)
+
+
+Perform `CMF` (Cluster Mean-Field) calculations. This is simply a variational optimization of both orbital and cluster state parameters, minimizing the energy of a single TPS. This was originally proposed by Scuseria and coworkers [link](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.92.085101).
+
 
 ### Installation
 1. Download

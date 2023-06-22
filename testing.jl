@@ -38,12 +38,12 @@ function run_cmf()
 
 
     #run cmf_oo
-    #e_cmf, U_cmf, d1  = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace, ansatze, RDM1(rdm1, rdm1), maxiter_oo = 20, verbose=0, diis_start=3);
+    e_cmf, U_cmf, d1  = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace, ansatze, RDM1(rdm1, rdm1), maxiter_oo = 100, verbose=0, diis_start=3);
     #e_cmf, U_cmf, d1 = ClusterMeanField.cmf_oo(ints, clusters, init_fspace, ansatze, RDM1(rdm1, rdm1), max_iter_oo=200, verbose=0, gconv=1e-6, method="bfgs");
-    e_cmf, U_cmf, d1  = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace, RDM1(rdm1, rdm1), maxiter_oo=4, verbose=0, diis_start=3);
+    #e_cmf, U_cmf, d1  = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace, RDM1(rdm1, rdm1), maxiter_oo=4, verbose=0, diis_start=3);
     #return e_cmf, U_cmf, d1
     #cluster_bases = FermiCG.compute_cluster_eigenbasis_spin(ints, clusters, d1, [3,3,3,3], init_fspace, max_roots=20, verbose=1);
     #@save "testing_ansatz.jld2" ints clusters d1 init_fspace rdm1 
-    #return ints, clusters, d1
+    return d1
 end
 

@@ -707,6 +707,16 @@ function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, ansatz
         return gout
     end
 
+    #
+    #   Define Numerical Gradient function
+    #
+
+    #function g(kappa)
+    #    gout = orbital_gradient_numerical(ints, clusters, kappa, fspace, ansatze, d1_curr) 
+    #    g_tmp = norm(gout)
+    #    return g
+    #end
+
     #   
     #   Define Callback for logging and checking for convergence
     #
@@ -740,6 +750,7 @@ function cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, ansatz
                                )
 
         res = optimize(f, g, kappa, optmethod, options; inplace = false )
+        #res = optimize(f, kappa, optmethod, options; inplace = false )
         summary(res)
         e = Optim.minimum(res)
         display(res)
@@ -874,6 +885,26 @@ function orbital_objective_function(ints, clusters, kappa, fspace, rdm::RDM1;
 end
 
 """
+    orbital_objective_function(ints, clusters, kappa, fspace, ansatze::Vector{Vector{Ansatz}}, da, db; 
+                                    ci_conv     = 1e-9,
+                                    sequential  = false,
+                                    verbose     = 1)
+Objective function to minimize in OO-CMF
+"""
+function orbital_objective_function(ints, clusters, kappa, fspace, ansatze::Vector{Vector{Ansatz}}, rdm::RDM1{T}; 
+                                    ci_conv     = 1e-9,
+                                    sequential  = false,
+                                    verbose     = 0) where T
+
+    norb = n_orb(ints)
+    K = unpack_gradient(kappa, norb)
+    U = exp(K)
+    ints_tmp = orbital_rotation(ints,U)
+    e, rdm1_dict, _ = cmf_ci(ints_tmp, clusters, fspace, ansatze, orbital_rotation(rdm, U), verbose=verbose)
+    return e
+end
+
+"""
     orbital_gradient_numerical(ints, clusters, kappa, fspace, da, db; 
                                     gconv = 1e-8, 
                                     verbose = 1,
@@ -896,6 +927,36 @@ function orbital_gradient_numerical(ints, clusters, kappa, fspace, d::RDM1;
         k2 = deepcopy(kappa)
         k2[ii] -= stepsize
         e2 = orbital_objective_function(ints, clusters, k2, fspace, d, ci_conv=ci_conv, verbose=verbose) 
+        
+        grad[ii] = (e1-e2)/(2*stepsize)
+        #println(e1)
+    end
+    return grad
+end
+
+"""
+    orbital_gradient_numerical(ints, clusters, kappa, fspace, ansatze::Vector{Vector{Ansatz}}, da, db; 
+                                    gconv = 1e-8, 
+                                    verbose = 1,
+                                    stepsize = 1e-6)
+Compute orbital gradient with finite difference
+"""
+function orbital_gradient_numerical(ints, clusters, kappa, fspace, ansatze::Vector{Vector{Ansatz}}, d::RDM1; 
+                                    ci_conv = 1e-10, 
+                                    verbose = 0,
+                                    stepsize = 1e-6)
+    grad = zeros(size(kappa))
+    for (ii,i) in enumerate(kappa)
+        
+        #ii == 2 || continue
+    
+        k1 = deepcopy(kappa)
+        k1[ii] += stepsize
+        e1 = orbital_objective_function(ints, clusters, k1, fspace, ansatze, d, ci_conv=ci_conv, verbose=verbose) 
+        
+        k2 = deepcopy(kappa)
+        k2[ii] -= stepsize
+        e2 = orbital_objective_function(ints, clusters, k2, fspace, ansatze, d, ci_conv=ci_conv, verbose=verbose) 
         
         grad[ii] = (e1-e2)/(2*stepsize)
         #println(e1)
@@ -1316,6 +1377,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
 
     function step!(k)
         K = unpack_gradient(k, norb)
+        
         Ui = exp(K)
         
         ints_i = orbital_rotation(ints,Ui)
@@ -1332,8 +1394,12 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         
         d1_i = orbital_rotation(d1_i, Ui')
         d2_i = orbital_rotation(d2_i, Ui')
-        g_i = build_orbital_gradient(ints, d1_i, d2_i)
+        #g_i = build_orbital_gradient(ints, d1_i, d2_i)
+        g_i = orbital_gradient_numerical(ints, clusters, k, fspace, ansatze, d1) 
         #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
+        if verbose == 1
+            display(unpack_gradient(g_i, norb))
+        end
        
         if zero_intra_rots
             g_i = unpack_gradient(g_i, norb)

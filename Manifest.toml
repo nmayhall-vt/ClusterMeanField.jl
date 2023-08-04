@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.3"
 manifest_format = "2.0"
 
 [[deps.ANSIColoredPrinters]]
@@ -21,9 +21,7 @@ version = "0.3.4"
 
 [[deps.ActiveSpaceSolvers]]
 deps = ["Arpack", "BenchmarkTools", "BlockDavidson", "Documenter", "InCoreIntegrals", "InteractiveUtils", "JLD2", "KrylovKit", "LinearAlgebra", "LinearMaps", "NPZ", "OrderedCollections", "Parameters", "Printf", "Profile", "QCBase", "StaticArrays", "TensorOperations", "TimerOutputs"]
-git-tree-sha1 = "457abf172decb669bc7683777307ef131e9f36b3"
-repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/ActiveSpaceSolvers.jl"
+path = "/Users/nicole/My Drive/code/ActiveSpaceSolvers.jl"
 uuid = "f8e94ea7-44cc-4f7e-92b7-2a8da6f47aca"
 version = "0.1.0"
 
@@ -202,7 +200,7 @@ uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "0.27.23"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 
 [[deps.ExprTools]]
@@ -215,6 +213,9 @@ deps = ["Pkg", "Requires", "UUIDs"]
 git-tree-sha1 = "94f5101b96d2d968ace56f7f2db19d0a5f592e28"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 version = "1.15.0"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -351,9 +352,9 @@ version = "4.14.0"
 
 [[deps.LLVMExtra_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg", "TOML"]
-git-tree-sha1 = "771bfe376249626d3ca12bcd58ba243d3f961576"
+git-tree-sha1 = "7718cf44439c676bc0ec66a87099f41015a522d6"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
-version = "0.0.16+0"
+version = "0.0.16+2"
 
 [[deps.LRUCache]]
 git-tree-sha1 = "d64a0aff6691612ab9fb0117b0995270871c5dfc"
@@ -541,9 +542,7 @@ version = "1.94.1"
 
 [[deps.QCBase]]
 deps = ["Printf", "StaticArrays"]
-git-tree-sha1 = "6563e66eb0574f4cdf9f6f1259dcd50007be190c"
-repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/QCBase.jl"
+path = "/Users/nicole/My Drive/code/QCBase.jl"
 uuid = "0dbae682-d491-4cbc-9a73-7148926f1b63"
 version = "0.1.0"
 

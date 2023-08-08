@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.7.2"
+julia_version = "1.7.3"
 manifest_format = "2.0"
 
 [[deps.ANSIColoredPrinters]]
@@ -14,16 +14,11 @@ git-tree-sha1 = "69f7020bd72f069c219b5e8c236c1fa90d2cb409"
 uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 version = "1.2.1"
 
-[[deps.AbstractTrees]]
-git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
-uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-version = "0.3.4"
-
 [[deps.ActiveSpaceSolvers]]
 deps = ["Arpack", "BenchmarkTools", "BlockDavidson", "Documenter", "InCoreIntegrals", "InteractiveUtils", "JLD2", "KrylovKit", "LinearAlgebra", "LinearMaps", "NPZ", "OrderedCollections", "Parameters", "Printf", "Profile", "QCBase", "StaticArrays", "TensorOperations", "TimerOutputs"]
-git-tree-sha1 = "457abf172decb669bc7683777307ef131e9f36b3"
+git-tree-sha1 = "f781036635964dfdd47b61e04473a028e2f22904"
 repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/ActiveSpaceSolvers.jl"
+repo-url = "https://github.com/nmayhall-vt/ActiveSpaceSolvers.jl.git"
 uuid = "f8e94ea7-44cc-4f7e-92b7-2a8da6f47aca"
 version = "0.1.0"
 
@@ -73,10 +68,10 @@ uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 version = "1.3.1"
 
 [[deps.BlockDavidson]]
-deps = ["InteractiveUtils", "LinearAlgebra", "LinearMaps", "Printf", "Random"]
-git-tree-sha1 = "7d540db6470a8b8000c36ba1d79c639df99b1707"
+deps = ["Arpack", "InteractiveUtils", "LinearAlgebra", "LinearMaps", "Printf", "Random"]
+git-tree-sha1 = "a032da5c2ceaa87da830877885d3c7dfd602ce22"
 repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/BlockDavidson.jl"
+repo-url = "https://github.com/nmayhall-vt/BlockDavidson.jl.git"
 uuid = "b4c031f8-e7c9-4879-896c-063a10ff8103"
 version = "0.1.0"
 
@@ -108,18 +103,6 @@ deps = ["InteractiveUtils", "UUIDs"]
 git-tree-sha1 = "1833bda4a027f4b2a1c984baddcf755d77266818"
 uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
 version = "1.1.0"
-
-[[deps.ColorTypes]]
-deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "eb7f0f8307f71fac7c606984ea5fb2817275d6e4"
-uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.11.4"
-
-[[deps.Colors]]
-deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
-git-tree-sha1 = "417b0ed7b8b838aa6ca0a87aadf1bb9eb111ce40"
-uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
-version = "0.12.8"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools", "Test"]
@@ -202,7 +185,7 @@ uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "0.27.23"
 
 [[deps.Downloads]]
-deps = ["ArgTools", "LibCURL", "NetworkOptions"]
+deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 
 [[deps.ExprTools]]
@@ -216,6 +199,9 @@ git-tree-sha1 = "94f5101b96d2d968ace56f7f2db19d0a5f592e28"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 version = "1.15.0"
 
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
 git-tree-sha1 = "87519eb762f85534445f5cda35be12e32759ee14"
@@ -227,18 +213,6 @@ deps = ["ArrayInterfaceCore", "LinearAlgebra", "Requires", "Setfield", "SparseAr
 git-tree-sha1 = "5a2cff9b6b77b33b89f3d97a4d367747adce647e"
 uuid = "6a86dc24-6348-571c-b903-95158fe2bd41"
 version = "2.15.0"
-
-[[deps.FixedPointNumbers]]
-deps = ["Statistics"]
-git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
-uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
-version = "0.8.4"
-
-[[deps.FlameGraphs]]
-deps = ["AbstractTrees", "Colors", "FileIO", "FixedPointNumbers", "IndirectArrays", "LeftChildRightSiblingTrees", "Profile"]
-git-tree-sha1 = "d9eee53657f6a13ee51120337f98684c9c702264"
-uuid = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
-version = "0.2.10"
 
 [[deps.ForwardDiff]]
 deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
@@ -268,12 +242,6 @@ git-tree-sha1 = "ebb892e1df16040a845e1d11087e4fbfe10323a8"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
 version = "0.16.4"
 
-[[deps.HAML]]
-deps = ["DataStructures", "Markdown", "Requires"]
-git-tree-sha1 = "0e2bbef3c669498254a034394d6dd809e7a97ad6"
-uuid = "0bc81568-2411-4001-9bf1-c899fa54f385"
-version = "0.3.5"
-
 [[deps.Highlights]]
 deps = ["DocStringExtensions", "InteractiveUtils", "REPL"]
 git-tree-sha1 = "0341077e8a6b9fc1c2ea5edc1e93a956d2aec0c7"
@@ -288,16 +256,11 @@ version = "0.2.2"
 
 [[deps.InCoreIntegrals]]
 deps = ["Documenter", "JLD2", "LinearAlgebra", "NPZ", "QCBase", "Random", "TensorOperations"]
-git-tree-sha1 = "525df05827ad7d535218c1c22ffacd26db40f6c0"
+git-tree-sha1 = "af8305139199f4559cbe745578463b8a6f67ecab"
 repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/InCoreIntegrals.jl"
+repo-url = "https://github.com/nmayhall-vt/InCoreIntegrals.jl.git"
 uuid = "d8079e1f-d74b-4a3d-abb0-c0b53e3a8379"
 version = "0.1.0"
-
-[[deps.IndirectArrays]]
-git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
-uuid = "9b13fd28-a010-5f03-acff-a1bbcff69959"
-version = "1.0.0"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -351,9 +314,9 @@ version = "4.14.0"
 
 [[deps.LLVMExtra_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg", "TOML"]
-git-tree-sha1 = "771bfe376249626d3ca12bcd58ba243d3f961576"
+git-tree-sha1 = "7718cf44439c676bc0ec66a87099f41015a522d6"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
-version = "0.0.16+0"
+version = "0.0.16+2"
 
 [[deps.LRUCache]]
 git-tree-sha1 = "d64a0aff6691612ab9fb0117b0995270871c5dfc"
@@ -363,12 +326,6 @@ version = "1.3.0"
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
-
-[[deps.LeftChildRightSiblingTrees]]
-deps = ["AbstractTrees"]
-git-tree-sha1 = "b864cb409e8e445688bc478ef87c0afe4f6d1f8d"
-uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
-version = "0.1.3"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -541,17 +498,17 @@ version = "1.94.1"
 
 [[deps.QCBase]]
 deps = ["Printf", "StaticArrays"]
-git-tree-sha1 = "6563e66eb0574f4cdf9f6f1259dcd50007be190c"
+git-tree-sha1 = "3c09133cea1db5ebfbbb28d4181929be4d9f2662"
 repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/QCBase.jl"
+repo-url = "https://github.com/nmayhall-vt/QCBase.jl.git"
 uuid = "0dbae682-d491-4cbc-9a73-7148926f1b63"
 version = "0.1.0"
 
 [[deps.RDM]]
-deps = ["ActiveSpaceSolvers", "BlockDavidson", "InCoreIntegrals", "JLD2", "LinearAlgebra", "NPZ", "Printf", "QCBase", "Random", "TensorOperations"]
-git-tree-sha1 = "c4bbed33b4638ebe262cdc78e25c6f4e8b02df69"
+deps = ["BlockDavidson", "InCoreIntegrals", "JLD2", "LinearAlgebra", "NPZ", "Printf", "QCBase", "Random", "TensorOperations"]
+git-tree-sha1 = "c6b25e020bf0ae8549b8182caf70834ba57b316b"
 repo-rev = "main"
-repo-url = "https://github.com/nmayhall-vt/RDM.jl"
+repo-url = "https://github.com/nmayhall-vt/RDM.jl.git"
 uuid = "e382014c-6717-46ba-99dc-880f59d7a5e4"
 version = "0.1.0"
 
@@ -625,12 +582,6 @@ deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jl
 git-tree-sha1 = "d75bda01f8c31ebb72df80a46c88b25d1c79c56d"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
 version = "2.1.7"
-
-[[deps.StatProfilerHTML]]
-deps = ["DataStructures", "Dates", "FlameGraphs", "HAML", "Profile", "SHA", "Test"]
-git-tree-sha1 = "768fdebd755d6d0e16a9f3584a727a30a7a45087"
-uuid = "a8a75453-ed82-57c9-9e16-4cd1196ecbf5"
-version = "1.4.2"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]

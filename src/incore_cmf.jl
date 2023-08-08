@@ -1394,8 +1394,8 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         
         d1_i = orbital_rotation(d1_i, Ui')
         d2_i = orbital_rotation(d2_i, Ui')
-        #g_i = build_orbital_gradient(ints, d1_i, d2_i)
-        g_i = orbital_gradient_numerical(ints, clusters, k, fspace, ansatze, d1) 
+        g_i = build_orbital_gradient(ints, d1_i, d2_i)
+        #g_i = orbital_gradient_numerical(ints, clusters, k, fspace, ansatze, d1) 
         #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
         if verbose == 1
             display(unpack_gradient(g_i, norb))
@@ -1454,7 +1454,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         #end
 
             
-        @assert nss == size(g_ss,2)
+        @assert nss == size(tg_ss,2)
         
         if i >= diis_start 
             steptype = "diis"

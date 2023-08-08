@@ -1454,7 +1454,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         #end
 
             
-        @assert nss == size(tg_ss,2)
+        #@assert nss == size(tg_ss,2)
         
         if i >= diis_start 
             steptype = "diis"

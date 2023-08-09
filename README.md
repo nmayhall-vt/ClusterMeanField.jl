@@ -51,12 +51,14 @@ Perform `CMF` (Cluster Mean-Field) calculations. This is simply a variational op
 2. Create conda environment to install Julia and will hold the PySCF executable. Install Julia with conda makes sure the correct python version will be found when using PyCall. where `-tauto` let's Julia pick the max number of threads. Use `-t N` to select `N` manually. Removing defaults to 1 thread. 
 
 	```bash
-	CONDA_SUBDIR=osx-64 conda create -n myenv_x86 python=3.7
-        conda activate my_env_X86
-        conda config --env --set subdir osx-64
+	conda create -n env_osx
+	conda activate env_osx
+	conda config --env --set subdir osx-64 
+	conda install python==3.7
+	conda config --add channels conda-forge
+	conda install -c pyscf pyscf
+	conda install h5py==2.10.0
 	conda install julia
-	conda install numpy
-        pip install pyscf
 	julia --project=./ -tauto 
 	```
 

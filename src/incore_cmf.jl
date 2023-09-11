@@ -1216,7 +1216,6 @@ end
                     diis_start      = 1,
                     alpha           = .1,
                     zero_intra_rots = true, 
-                    orb_hessian     = true,
                     sequential      = false
                     ) where T
 

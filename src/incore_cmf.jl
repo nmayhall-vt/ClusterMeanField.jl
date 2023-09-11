@@ -1296,6 +1296,16 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         d1_i = orbital_rotation(d1_i, Ui')
         d2_i = orbital_rotation(d2_i, Ui')
         g_i = build_orbital_gradient(ints, d1_i, d2_i)
+        
+        if orb_hessian
+            h = RDM.build_orbital_hessian(ints,d1_i,d2_i)
+        else
+            h = nothing
+        end
+
+        if verbose == 1
+            display(unpack_gradient(g_i, norb))
+        end
         #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
        
         #if zero_intra_rots
@@ -1307,11 +1317,11 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         #end
         e = e_i
         U = Ui
-        return e_i, g_i, d1_i
+        return e_i, g_i, d1_i, h
     end
     
     # First step
-    e_i, g_i, d1_i = step!(zeros(norb2))
+    e_i, g_i, d1_i, h_i = step!(zeros(norb2))
     k_i = zeros(norb2)
         
     #g_i = reshape(g_i, (norb2,1))
@@ -1409,19 +1419,19 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
             verbose < 2 || display(g_ss)
         end
        
-        if zero_intra_rots
-            # Remove intracluster rotations
-            k_i = unpack_gradient(k_i, norb)
-            for ci in clusters
-                k_i[ci.orb_list, ci.orb_list] .= 0
-            end
-            k_i = pack_gradient(k_i, norb)
-        end
+        #if zero_intra_rots
+        #    # Remove intracluster rotations
+        #    k_i = unpack_gradient(k_i, norb)
+        #    for ci in clusters
+        #        k_i[ci.orb_list, ci.orb_list] .= 0
+        #    end
+        #    k_i = pack_gradient(k_i, norb)
+        #end
        
         # 
         # Compute energy and gradient
         #
-        e_i, g_i, d1_i = step!(k_i)
+        e_i, g_i, d1_i, h_i,  = step!(k_i)
         g_i = reshape(g_i, (norb2,1))
         k_i = reshape(k_i, (norb2,1))
         d_i = d1_i

@@ -1310,7 +1310,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         end
         e = e_i
         U = Ui
-        return e_i, g_i, d1_i, h
+        return e_i, g_i, d1_i
     end
     
     # First step

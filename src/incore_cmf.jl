@@ -1259,7 +1259,6 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
                     diis_start      = 1,
                     alpha           = .1,
                     zero_intra_rots = true,
-                    orb_hessian     = true,
                     sequential      = false
     ) where T
     #={{{=#
@@ -1297,31 +1296,25 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         d2_i = orbital_rotation(d2_i, Ui')
         g_i = build_orbital_gradient(ints, d1_i, d2_i)
         
-        if orb_hessian
-            h = RDM.build_orbital_hessian(ints,d1_i,d2_i)
-        else
-            h = nothing
-        end
-
         if verbose == 1
             display(unpack_gradient(g_i, norb))
         end
         #g_i = build_orbital_gradient(ints_i, d1_i, d2_i)
        
-        #if zero_intra_rots
-        #    g_i = unpack_gradient(g_i, norb)
-        #    for ci in clusters
-        #        g_i[ci.orb_list, ci.orb_list] .= 0
-        #    end
-        #    g_i = pack_gradient(g_i, norb)
-        #end
+        if zero_intra_rots
+            g_i = unpack_gradient(g_i, norb)
+            for ci in clusters
+                g_i[ci.orb_list, ci.orb_list] .= 0
+            end
+            g_i = pack_gradient(g_i, norb)
+        end
         e = e_i
         U = Ui
         return e_i, g_i, d1_i, h
     end
     
     # First step
-    e_i, g_i, d1_i, h_i = step!(zeros(norb2))
+    e_i, g_i, d1_i = step!(zeros(norb2))
     k_i = zeros(norb2)
         
     #g_i = reshape(g_i, (norb2,1))
@@ -1330,26 +1323,10 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
     #k_ss = hcat(k_ss, k_i)
     nss = size(g_ss,2)
     
-    if zero_intra_rots
-        proj_vec = projection_vector(ansatze, norb)
-    end
-
     for i in 1:maxiter_oo
-        if zero_intra_rots && orb_hessian
-            tmp_step = (pinv(proj_vec'*h_i*proj_vec))*(proj_vec'*g_i)
-            step_i = proj_vec*tmp_step
-        elseif orb_hessian && zero_intra_rots==false
-            step_i = pinv(h_i)*g_i
-        elseif orb_hessian==false && zero_intra_rots
-            tmp_step = proj_vec'*g_i
-            g_i = proj_vec*tmp_sep
-            step_i = alpha*g_i
-        else
-            step_i = alpha*g_i
-        end
-        
-        k_i = k_i - step_i
-    
+       
+        k_i = k_i - alpha*g_i
+
         if nss < max_ss_size
             nss += 1
             g_ss = hcat(g_ss, g_i)
@@ -1419,19 +1396,19 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
             verbose < 2 || display(g_ss)
         end
        
-        #if zero_intra_rots
-        #    # Remove intracluster rotations
-        #    k_i = unpack_gradient(k_i, norb)
-        #    for ci in clusters
-        #        k_i[ci.orb_list, ci.orb_list] .= 0
-        #    end
-        #    k_i = pack_gradient(k_i, norb)
-        #end
+        if zero_intra_rots
+            # Remove intracluster rotations
+            k_i = unpack_gradient(k_i, norb)
+            for ci in clusters
+                k_i[ci.orb_list, ci.orb_list] .= 0
+            end
+            k_i = pack_gradient(k_i, norb)
+        end
        
         # 
         # Compute energy and gradient
         #
-        e_i, g_i, d1_i, h_i,  = step!(k_i)
+        e_i, g_i, d1_i  = step!(k_i)
         g_i = reshape(g_i, (norb2,1))
         k_i = reshape(k_i, (norb2,1))
         d_i = d1_i

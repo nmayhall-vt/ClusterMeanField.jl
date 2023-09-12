@@ -494,7 +494,9 @@ end
     cmf_oo(ints::InCoreInts{T}, clusters::Vector{MOCluster}, fspace, dguess::RDM1{T}; 
                 max_iter_oo=100, 
                 max_iter_ci=100, 
-                gconv=1e-6, 
+                gconv=1e-6,
+                tol_d1=1e-7,
+                tol_ci=1e-8, 
                 verbose=0, 
                 method="bfgs", 
                 alpha=nothing,
@@ -510,8 +512,8 @@ Do CMF with orbital optimization
 - `max_iter_oo`: Max iter for the orbital optimization iterations 
 - `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
 - `gconv`: Convergence threshold for change in gradient of energy 
-- `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
-- `maxiter_ci`: Max iter for the CI diagonalization of the cluster states 
+- `tol_ci`: Convergence threshold for the cluster CI problems 
+- `tol_d1`: Convergence threshold for the CMF 1RDM 
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
 - `method`: optimization method
@@ -643,6 +645,8 @@ end
                 max_iter_oo=100, 
                 max_iter_ci=100, 
                 gconv=1e-6, 
+                tol_d1=1e-7,
+                tol_ci=1e-8,
                 verbose=0, 
                 method="bfgs", 
                 alpha=nothing,
@@ -659,8 +663,8 @@ Do CMF with orbital optimization
 - `max_iter_oo`: Max iter for the orbital optimization iterations 
 - `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
 - `gconv`: Convergence threshold for change in gradient of energy 
-- `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
-- `maxiter_ci`: Max iter for the CI diagonalization of the cluster states 
+- `tol_ci`: Convergence threshold for the cluster CI problems 
+- `tol_d1`: Convergence threshold for the CMF 1RDM 
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
 - `method`: optimization method

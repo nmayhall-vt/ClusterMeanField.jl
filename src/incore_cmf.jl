@@ -417,6 +417,7 @@ Optimize the 1RDM for CMF-CI
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `ansatze`:: Vector{<:Ansatz}} from ActiveSpaceSolvers to determine RASCI or FCI has to be  done inside each cmf cluster
 - `in_rdm1`: initial guess for 1particle density matrix
 - `tol_d1`: Convergence threshold for change in density 
 - `tol_ci`: Convergence threshold for the cluster CI problems 
@@ -509,6 +510,8 @@ Do CMF with orbital optimization
 - `max_iter_oo`: Max iter for the orbital optimization iterations 
 - `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
 - `gconv`: Convergence threshold for change in gradient of energy 
+- `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
+- `maxiter_ci`: Max iter for the CI diagonalization of the cluster states 
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
 - `method`: optimization method
@@ -651,10 +654,13 @@ Do CMF with orbital optimization
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `ansatze`:: Vector{<:Ansatz}} from ActiveSpaceSolvers to determine RASCI or FCI has to be  done inside each cmf cluster
 - `dguess_a`: initial guess for 1particle density matrix
 - `max_iter_oo`: Max iter for the orbital optimization iterations 
 - `max_iter_ci`: Max iter for the cmf iteration for the cluster states 
 - `gconv`: Convergence threshold for change in gradient of energy 
+- `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
+- `maxiter_ci`: Max iter for the CI diagonalization of the cluster states 
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves comvergence, may depend on cluster orderings   
 - `verbose`: Printing level 
 - `method`: optimization method
@@ -979,6 +985,7 @@ Do CMF with orbital optimization
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `ansatze`:: Vector{<:Ansatz}} from ActiveSpaceSolvers to determine RASCI or FCI has to be  done inside each cmf cluster
 - `dguess`: initial guess for 1particle density matrix
 - `maxiter_oo`: Max iter for the orbital optimization iterations 
 - `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
@@ -1331,6 +1338,7 @@ Do CMF with orbital optimization using DIIS
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `ansatze`:: Vector{<:Ansatz}} from ActiveSpaceSolvers to determine RASCI or FCI has to be  done inside each cmf cluster
 - `dguess`: initial guess for 1particle density matrix
 - `maxiter_oo`: Max iter for the orbital optimization iterations 
 - `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
@@ -1344,7 +1352,8 @@ Do CMF with orbital optimization using DIIS
 - `diis_start`: When to start doing DIIS extrapolations
 - `alpha`: New vector added to ss is k=-alpha*g where g is the orbital gradient. This should be improved with Hessian.
 - `zero_intra_rots`: Should we zero out rotations within a cluster? Helps with FCI solvers which should have zero gradients.
-
+- `use_pyscf`: Use pyscf for FCI calculation
+- `orb_hessian`: use Hessian based optimisation
 # Returns
 
 - `e`: Energy
@@ -1593,6 +1602,7 @@ end
 - `ints::InCoreInts`: integrals for full system
 - `clusters::Vector{MOCluster}`: vector of cluster objects
 - `fspace::Vector{Vector{Integer}}`: vector of particle number occupations for each cluster specifying the sectors of fock space 
+- `ansatze`:: Vector{<:Ansatz}} from ActiveSpaceSolvers to determine RASCI or FCI has to be  done inside each cmf cluster
 - `dguess`: initial guess for 1particle density matrix
 - `maxiter_oo`: Max iter for the orbital optimization iterations 
 - `maxiter_d1`: Max iter for the cmf iteration for the 1RDM 
@@ -1600,6 +1610,7 @@ end
 - `tol_oo`: Convergence threshold for change in orbital gradient 
 - `tol_ci`: Convergence threshold for the cluster CI problems 
 - `tol_d1`: Convergence threshold for the CMF 1RDM 
+- `use_pyscf`: Use pyscf for FCI calculation
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves convergence, may depend on cluster orderings   
 - `verbose`: Printing level 
 

@@ -20,7 +20,7 @@ function orbital_objective_function(ints, clusters, kappa, fspace, rdm::RDM1;
     return e
 end
 """
-    orbital_objective_function(ints, clusters, kappa, fspace, ansatze::Vector{Vector{Ansatz}}, da, db; 
+    orbital_objective_function(ints, clusters, kappa, fspace, ansatze::Vector{Ansatz}, da, db; 
                                     ci_conv     = 1e-9,
                                     sequential  = false,
                                     verbose     = 1)
@@ -40,7 +40,7 @@ function orbital_objective_function(ints, clusters, kappa, fspace,ansatze::Vecto
 end
 
 """
-    orbital_gradient_numerical(ints, clusters, kappa, fspace, ansatze::Vector{Vector{Ansatz}}, da, db; 
+    orbital_gradient_numerical(ints, clusters, kappa, fspace, ansatze::Vector{Ansatz}, da, db; 
                                     gconv = 1e-8, 
                                     verbose = 1,
                                     stepsize = 1e-6)

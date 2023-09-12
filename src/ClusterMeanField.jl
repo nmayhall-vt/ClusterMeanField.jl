@@ -33,5 +33,6 @@ export get_ovlp
 include("PyscfFunctions.jl")
 include("incore_cmf.jl")
 include("direct_cmf.jl")
+include("finite_difference.jl")
 
 end

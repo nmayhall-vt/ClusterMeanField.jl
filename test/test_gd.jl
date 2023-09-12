@@ -83,8 +83,8 @@ using ActiveSpaceSolvers
     @test isapprox(e_cmf, -3.104850893117, atol=1e-12)
    
     #ints = orbital_rotation(ints, U)
-
-    e_cmf, Ugd, d1gd = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace, rdm1, 
+    ansatze=[FCIAnsatz(3,2,1),FCIAnsatz(3,1,2)]
+    e_cmf, Ugd, d1gd = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace,ansatze, rdm1, 
                               tol_oo=1e-10, 
                               tol_d1=1e-11, 
                               tol_ci=1e-12, 
@@ -114,4 +114,3 @@ using ActiveSpaceSolvers
                               verbose=0, conv_oo=1e-10, conv_ci=1e-11, sequential=true, alpha=.2)
 
 end
-

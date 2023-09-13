@@ -124,9 +124,79 @@ end
     e_cmf, U = cmf_oo(ints, clusters, init_fspace, rdm1, 
                               verbose=0, gconv=1e-6, method="cg",sequential=true)
     @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
-    
+
+    ansatze=[FCIAnsatz(2,1,1),FCIAnsatz(2,1,1),FCIAnsatz(2,1,1)]
+    e_cmf, U_n, d1_n = ClusterMeanField.cmf_oo_newton(ints, clusters, init_fspace, ansatze,rdm1, maxiter_oo = 400,
+                           tol_oo=1e-6, 
+                           tol_d1=1e-9, 
+                           tol_ci=1e-11,
+                           verbose=4, 
+                           zero_intra_rots = true,
+                           sequential=true)
+    @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
+
+    e_cmf, U_n, d1_n = ClusterMeanField.cmf_oo_newton(ints, clusters, init_fspace, ansatze,rdm1, maxiter_oo = 400,
+                           tol_oo=1e-6, 
+                           tol_d1=1e-9, 
+                           tol_ci=1e-11,
+                           verbose=4, 
+                           zero_intra_rots = false,
+                           sequential=true)
+    @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
+    e_cmf, U, d1 = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace,ansatze, rdm1,
+                           maxiter_oo   = 500,
+                           maxiter_ci   = 200,
+                           maxiter_d1   = 200,
+                           verbose      = 0,
+                           tol_oo       = 1e-6,
+                           tol_d1       = 1e-9,
+                           tol_ci       = 1e-11,
+                           sequential   = true,
+                           diis_start   = 1,
+                           max_ss_size  = 24)
+    @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
+
+
+    e_cmf, U, d1 = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace,ansatze, rdm1,
+                           maxiter_oo   = 500,
+                           maxiter_ci   = 200,
+                           maxiter_d1   = 200,
+                           verbose      = 0,
+                           tol_oo       = 1e-6,
+                           tol_d1       = 1e-9,
+                           tol_ci       = 1e-11,
+                           diis_start   = 1,
+                           max_ss_size  = 24,
+                           zero_intra_rots = false,
+                           sequential=true)
+    e_cmf, U, d1 = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace,ansatze, rdm1,
+                           maxiter_oo   = 500,
+                           maxiter_ci   = 200,
+                           maxiter_d1   = 200,
+                           verbose      = 0,
+                           tol_oo       = 1e-6,
+                           tol_d1       = 1e-9,
+                           tol_ci       = 1e-11,
+                           diis_start   = 1,
+                           max_ss_size  = 24,
+                           zero_intra_rots = true,
+                           orb_hessian=false,
+                           sequential=true)
+    e_cmf, U, d1 = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace,ansatze, rdm1,
+                           maxiter_oo   = 500,
+                           maxiter_ci   = 200,
+                           maxiter_d1   = 200,
+                           verbose      = 0,
+                           tol_oo       = 1e-6,
+                           tol_d1       = 1e-9,
+                           tol_ci       = 1e-11,
+                           diis_start   = 1,
+                           max_ss_size  = 24,
+                           zero_intra_rots = false,
+                           orb_hessian=false,
+                           sequential=true)
+    @test isapprox(e_cmf, -3.205983033016, atol=1e-10)
     Ccmf = Cl*U
     ClusterMeanField.pyscf_write_molden(mol,Ccmf,filename="cmf.molden")
-  
 end
     

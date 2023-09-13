@@ -376,7 +376,7 @@ function localize(C::Array{Float64,2}, method::String, mol::Molecule; verbose=4)
     pymol = make_pyscf_mole(mol)
 
     if lowercase(method) == "lowdin"
-	    ClS = pymol.intor("int1e_ovlp_sph")
+	    Cl = pymol.intor("int1e_ovlp_sph")
         F = svd(Cl)
         # display(Cl - F.U * Diagonal(F.S) * F.Vt)
         # display(Cl - F.vectors * Diagonal(F.values) * F.vectors')

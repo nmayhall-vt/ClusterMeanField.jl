@@ -1457,7 +1457,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
     nss = size(g_ss,2)
 
     if zero_intra_rots
-        proj_vec = projection_vector(ansatze, norb)
+        proj_vec = projection_vector(ansatze,clusters, norb)
     end
 
     for i in 1:maxiter_oo
@@ -1645,7 +1645,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
     U    = Matrix(1.0I, norb, norb)
     e    = 0.0
     if zero_intra_rots
-        proj_vec = projection_vector(ansatze, norb)
+        proj_vec = projection_vector(ansatze,clusters, norb)
     end
     function step!(ints, d1, k)
         norb = n_orb(ints)
@@ -1718,26 +1718,33 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
 #=}}}=#
 end
 
-
-function projection_vector(ansatze::Vector{<:Ansatz}, norb; gradient=false)
-    n_dim = norb*(norb-1)÷2#={{{=#
-
-
-
-    tmp_mat = Matrix(1I, n_dim, n_dim)
-
-    shift = 0
-    invar = Vector{Tuple{Int,Int}}()
-
-    for cluster in ansatze
-        tmp = ActiveSpaceSolvers.invariant_orbital_rotations(cluster)
-        for j in 1:length(tmp)
-            tmp[j] = tmp[j].+shift
-        end
-        shift += cluster.no
-        append!(invar, tmp)
+function convert_pairs(original_list, rearranged_pairs)
+    # Create a mapping from the rearranged index to the original index
+    index_mapping = Dict{Int,Int}()
+    for (original_idx, orbital) in enumerate(original_list)
+        index_mapping[original_idx] = orbital
     end
+    # println(index_mapping)
+    # Convert the pairs back to the original order
+    reverted_pairs = [(index_mapping[pair[1]], index_mapping[pair[2]]) for pair in rearranged_pairs]
 
+    return reverted_pairs
+end
+function projection_vector(ansatze::Vector{<:Ansatz}, clusters, norb;gradient=false)
+    n_dim = norb * (norb - 1) ÷ 2 #={{{=#
+    
+    tmp_mat = Matrix(1I, n_dim, n_dim)
+    clusters_new = [[orb for orb in cluster.orb_list] for cluster in clusters]
+    invar = Vector{Tuple{Int,Int}}()
+    count = 0
+    for cluster in ansatze
+        # println(cluster)
+        count += 1
+        tmp = ActiveSpaceSolvers.invariant_orbital_rotations(cluster)
+        tmp_global = convert_pairs(clusters_new[count], tmp)
+        append!(invar, tmp_global)
+        # println(invar)
+    end
     if gradient == true
         return invar
     end
@@ -1746,15 +1753,15 @@ function projection_vector(ansatze::Vector{<:Ansatz}, norb; gradient=false)
     full_list = ActiveSpaceSolvers.invariant_orbital_rotations(fci)
 
     keep_list = []
-    for (a,b) in enumerate(full_list)
+    for (a, b) in enumerate(full_list)
         if b in invar
             continue
         else
             push!(keep_list, a)
         end
     end
-    
-    proj_vec = tmp_mat[:,keep_list]
-    
-    return proj_vec#=}}}=#
+
+    proj_vec = tmp_mat[:, keep_list]
+
+    return proj_vec #=}}}=#
 end

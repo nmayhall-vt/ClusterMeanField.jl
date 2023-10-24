@@ -747,7 +747,7 @@ end
                                     stepsize = 1e-6)
 Compute orbital hessian with finite difference for cMF using orbital gradient 
 """
-function orbital_hessian_numerical(ints, clusters, kappa, fspace, ansatze,d::RDM1; verbose = 0,step_size = 1e-5,zero_intra_rots = true,maxiter_ci = 100, maxiter_d1 = 100, tol_d1 = 1e-6, tol_ci = 1e-8,sequential = false)
+function orbital_hessian_numerical(ints, clusters, kappa, fspace, ansatze,d::RDM1; verbose = 0,step_size = 5e-5,zero_intra_rots = true,maxiter_ci = 100, maxiter_d1 = 100, tol_d1 = 1e-6, tol_ci = 1e-8,sequential = false)
     n = length(kappa)
     #error("here.....")
     hessian = zeros(n, n)
@@ -782,6 +782,7 @@ function orbital_hessian_numerical(ints, clusters, kappa, fspace, ansatze,d::RDM
     norb = n_orb(ints)
     #central difference 
     for i in 1:n
+        println(i)
         x_plus_i = deepcopy(kappa)
         x_minus_i = deepcopy(kappa)
         x_plus_i[i] += step_size

@@ -1635,7 +1635,8 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
                     verbose         = 0, 
                     use_pyscf=true,
                     zero_intra_rots =true,
-                    sequential      = false
+                    sequential      = false,
+                    step_trust_region=false
     ) where T
     #={{{=#
     println(" Solve OO-CMF with newton")
@@ -1703,6 +1704,11 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
         else
             step_i=-(pinv(h_i)*(g_i))#;atol=1e-8  
         end
+        if step_trust_region==true
+            if norm(step_i)> 0.95
+                step_i=step_i*0.95/norm(step_i)
+            end
+        end
         e = ei
         U = U*Ui    
         converged = norm(g_i) < tol_oo 
@@ -1711,7 +1717,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
             # display(packed_hessian)
             break
         else
-            @printf(" Step: %4i E: %16.12f G: %12.2e  \n", i, ei, norm(g_i))
+            @printf(" Step: %4i E: %16.12f G: %12.2e step_size: %12.2e \n", i, ei, norm(g_i), norm(step_i))
         end
     end
     return  e,U,d1  
@@ -1730,7 +1736,7 @@ function convert_pairs(original_list, rearranged_pairs)
 
     return reverted_pairs
 end
-function projection_vector(ansatze::Vector{<:Ansatz}, clusters, norb;gradient=false)
+function projection_vector(ansatze::Vector{<:Ansatz}, clusters, norb)
     n_dim = norb * (norb - 1) ÷ 2 #={{{=#
     
     tmp_mat = Matrix(1I, n_dim, n_dim)
@@ -1744,9 +1750,6 @@ function projection_vector(ansatze::Vector{<:Ansatz}, clusters, norb;gradient=fa
         tmp_global = convert_pairs(clusters_new[count], tmp)
         append!(invar, tmp_global)
         # println(invar)
-    end
-    if gradient == true
-        return invar
     end
 
     fci = ActiveSpaceSolvers.FCIAnsatz(norb, 0, 0) #dummie FCI anstaz to generate all pairs

@@ -1617,7 +1617,7 @@ end
 - `use_pyscf`: Use pyscf for FCI calculation
 - `sequential`: If true use the density matrix of the previous cluster in a cMF iteration to form effective integrals. Improves convergence, may depend on cluster orderings   
 - `verbose`: Printing level 
-
+- `step_trust_region` to control the size of trust region with the step-size
 # Returns
 
 - `e`: Energy
@@ -1636,7 +1636,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
                     use_pyscf=true,
                     zero_intra_rots =true,
                     sequential      = false,
-                    step_trust_region=false
+                    step_trust_region=0.95
     ) where T
     #={{{=#
     println(" Solve OO-CMF with newton")
@@ -1704,10 +1704,9 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
         else
             step_i=-(pinv(h_i)*(g_i))#;atol=1e-8  
         end
-        if step_trust_region==true
-            if norm(step_i)> 0.95
-                step_i=step_i*0.95/norm(step_i)
-            end
+       
+        if norm(step_i)> step_trust_region
+            step_i=step_i*0.95/norm(step_i)
         end
         e = ei
         U = U*Ui    

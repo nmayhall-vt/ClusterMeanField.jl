@@ -440,6 +440,7 @@ function cmf_ci(ints, clusters, fspace, ansatze::Vector{<:Ansatz}, in_rdm1::RDM1
                 use_pyscf = true, 
                 sequential  = false) 
     rdm1 = deepcopy(in_rdm1)
+    # println(size(rdm1))
     energies = []
     e_prev = 0
 
@@ -463,7 +464,7 @@ function cmf_ci(ints, clusters, fspace, ansatze::Vector{<:Ansatz}, in_rdm1::RDM1
                                                         sequential  = sequential
                                                        )
         rdm1_curr = assemble_full_rdm(clusters, rdm1_dict)
-
+        # println(size(rdm1_curr))
         append!(energies,e_curr)
         error = (rdm1_curr.a+rdm1_curr.b) - (rdm1.a+rdm1.b)
         d_err = norm(error)
@@ -1375,10 +1376,12 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
                     max_ss_size     = 8, 
                     diis_start      = 1,
                     alpha           = .1,
-                    use_pyscf=true,
+                    step_trust_region=0.95,
+                    use_pyscf       = true,
                     zero_intra_rots = true,
                     orb_hessian     = true,
-                    sequential      = false
+                    sequential      = false,
+                    trust_region    = false
     ) where T
     #={{{=#
     println(" Solve OO-CMF with DIIS")
@@ -1410,8 +1413,9 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
                                          tol_d1     = tol_d1, 
                                          tol_ci     = tol_ci, 
                                          use_pyscf=use_pyscf,
-                                         verbose    = 0, 
-                                         sequential = sequential)
+                                         verbose    = verbose, 
+                                         sequential = sequential
+                                         )
         d1_i, d2_i = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
         
         d1_i = orbital_rotation(d1_i, Ui')
@@ -1474,8 +1478,13 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
         else
             step_i = alpha*g_i
         end
-        
+        if trust_region==true
+            if norm(step_i)> step_trust_region
+                step_i=step_i*step_trust_region/norm(step_i)
+            end
+        end
         k_i = k_i - step_i
+        
        
         if nss < max_ss_size
             nss += 1
@@ -1567,7 +1576,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
             
         
         if norm(g_i) < tol_oo 
-            @printf("*ooCMF Iter: %4i Total= %16.15f G= %12.3e #SS: %4s\n", i, e_i, norm(g_i), nss)
+            @printf("*ooCMF Iter: %4i Total= %16.15f G= %12.3e step_size= %12.3e #SS: %4s\n", i, e_i, norm(g_i),norm(k_i), nss)
             break
         end
 
@@ -1577,7 +1586,7 @@ function cmf_oo_diis(ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fspace
 
        
 
-        @printf(" ooCMF Iter: %4i Total= %16.15f G= %12.3e #SS: %4s\n", i, e_i, norm(g_i), nss)
+        @printf("*ooCMF Iter: %4i Total= %16.15f G= %12.3e step_size= %12.3e #SS: %4s\n", i, e_i, norm(g_i),norm(k_i), nss)
     end
 
     U = exp(unpack_gradient(k_i,norb))
@@ -1633,10 +1642,12 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
                     tol_d1          = 1e-7, 
                     tol_ci          = 1e-8, 
                     verbose         = 0, 
+                    step_trust_region=0.95,
                     use_pyscf=true,
                     zero_intra_rots =true,
                     sequential      = false,
-                    step_trust_region=0.95
+                    trust_region=false,
+                    
     ) where T
     #={{{=#
     println(" Solve OO-CMF with newton")
@@ -1668,7 +1679,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
                                          maxiter_ci = maxiter_ci, 
                                          tol_d1     = tol_d1, 
                                          tol_ci     = tol_ci, 
-                                         verbose    = 0, 
+                                         verbose    = verbose, 
                                          use_pyscf=use_pyscf,
                                          sequential = sequential)
         
@@ -1676,7 +1687,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
         g_i = build_orbital_gradient(ints, gd1, gd2)
         # energy_computed=compute_energy(ints, gd1,gd2)
         packed_hessian=RDM.build_orbital_hessian(ints,gd1,gd2)
-        
+        # display(packed_hessian)
         # if zero_intra_rots
         #    g_i = unpack_gradient(g_i, norb)
         #    for ci in clusters
@@ -1704,9 +1715,10 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
         else
             step_i=-(pinv(h_i)*(g_i))#;atol=1e-8  
         end
-       
-        if norm(step_i)> step_trust_region
-            step_i=step_i*0.95/norm(step_i)
+        if trust_region==true
+            if norm(step_i)> step_trust_region
+                step_i=step_i*step_trust_region/norm(step_i)
+            end
         end
         e = ei
         U = U*Ui    
@@ -1724,7 +1736,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
 end
 
 function convert_pairs(original_list, rearranged_pairs)
-    # Create a mapping from the rearranged index to the original index
+    # Create a mapping from the rearranged i6dex to the original index
     index_mapping = Dict{Int,Int}()
     for (original_idx, orbital) in enumerate(original_list)
         index_mapping[original_idx] = orbital
@@ -1746,11 +1758,37 @@ function projection_vector(ansatze::Vector{<:Ansatz}, clusters, norb)
         # println(cluster)
         count += 1
         tmp = ActiveSpaceSolvers.invariant_orbital_rotations(cluster)
+        # println(tmp)
         tmp_global = convert_pairs(clusters_new[count], tmp)
+        # println(tmp_global)
         append!(invar, tmp_global)
         # println(invar)
     end
+    for i in ansatze
+        if typeof(i) == RASCIAnsatz
+            ras1i, ras2i, ras3i = ActiveSpaceSolvers.RASCI.make_rasorbs(i.ras_spaces[1], i.ras_spaces[2], i.ras_spaces[3], i.no)
+            for j in ansatze
+                ras1j, ras2j, ras3j = ActiveSpaceSolvers.RASCI.make_rasorbs(j.ras_spaces[1], j.ras_spaces[2], j.ras_spaces[3], j.no)
+                pairs = []
+                for a in 1:length(ras1i)
+                    for b in a:length(ras1j)
+                        # println(ras1i[a])
+                        push!(pairs, (ras1i[a],i.no+ras1j[b]))
+                    end
+                end
 
+                for e in 1:length(ras3i)
+                    for f in e:length(ras3j)
+                        push!(pairs, (ras3i[e],i.no+ras3j[f]))
+                    end
+                end
+                # println(pairs)
+                append!(invar,pairs)
+            end
+        end
+    end
+    # append!(invar,ras13_ras13_pairs)
+    # println(invar)
     fci = ActiveSpaceSolvers.FCIAnsatz(norb, 0, 0) #dummie FCI anstaz to generate all pairs
     full_list = ActiveSpaceSolvers.invariant_orbital_rotations(fci)
 

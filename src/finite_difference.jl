@@ -754,12 +754,12 @@ function orbital_hessian_numerical(ints, clusters, kappa, fspace, ansatze,d::RDM
     function step_numerical!(ints, d1, k)
         norb = n_orb(ints)
         K = unpack_gradient(k, norb)
-        if zero_intra_rots
-            # Remove intracluster rotations
-            for ci in clusters
-                K[ci.orb_list, ci.orb_list] .= 0
-            end
-        end
+        # if zero_intra_rots
+        #     # Remove intracluster rotations
+        #     for ci in clusters
+        #         K[ci.orb_list, ci.orb_list] .= 0
+        #     end
+        # end
        
         Ui = exp(K)
         

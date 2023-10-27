@@ -1764,26 +1764,28 @@ function projection_vector(ansatze::Vector{<:Ansatz}, clusters, norb)
         append!(invar, tmp_global)
         # println(invar)
     end
-    for i in ansatze
+    for (index_i, i) in enumerate(ansatze)
         if typeof(i) == RASCIAnsatz
             ras1i, ras2i, ras3i = ActiveSpaceSolvers.RASCI.make_rasorbs(i.ras_spaces[1], i.ras_spaces[2], i.ras_spaces[3], i.no)
-            for j in ansatze
+            for (index_j, j) in enumerate(ansatze)
                 ras1j, ras2j, ras3j = ActiveSpaceSolvers.RASCI.make_rasorbs(j.ras_spaces[1], j.ras_spaces[2], j.ras_spaces[3], j.no)
                 pairs = []
-                for a in 1:length(ras1i)
-                    for b in a:length(ras1j)
-                        # println(ras1i[a])
-                        push!(pairs, (ras1i[a],i.no+ras1j[b]))
+                if index_j>index_i
+                    for a in 1:length(ras1i)
+                        for b in a:length(ras1j)
+                            # println(ras1i[a])
+                            push!(pairs, (ras1i[a]+clusters[index_i].orb_list[1]-1,clusters[index_j].orb_list[1]+ras1j[b]-1))
+                        end
                     end
-                end
 
-                for e in 1:length(ras3i)
-                    for f in e:length(ras3j)
-                        push!(pairs, (ras3i[e],i.no+ras3j[f]))
+                    for e in 1:length(ras3i)
+                        for f in e:length(ras3j)
+                            push!(pairs, (ras3i[e]+clusters[index_i].orb_list[1]-1,clusters[index_j].orb_list[1]+ras3j[f]-1))
+                        end
                     end
+                    # println(pairs)
+                    append!(invar,pairs)
                 end
-                # println(pairs)
-                append!(invar,pairs)
             end
         end
     end

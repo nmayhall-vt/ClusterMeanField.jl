@@ -61,9 +61,9 @@ cluster_list = [collect(1:6), collect(7:12)]
 clusters = [MOCluster(i,collect(cluster_list[i])) for i = 1:length(cluster_list)]
 init_fspace = [ (3,3) for i in 1:n_clusters]
 display(clusters)
-ansatze = [RASCIAnsatz(6, 3, 3, (1,4,1), max_h=2, max_p=2), RASCIAnsatz(6,3,3,(1,4,1), max_h=2, max_p=2)] #FCI type RASCI calculation
+# ansatze = [RASCIAnsatz(6, 3, 3, (1,4,1), max_h=2, max_p=2), RASCIAnsatz(6,3,3,(1,4,1), max_h=2, max_p=2)] #FCI type RASCI calculation
 #ansatze = [RASCIAnsatz(6, 3, 3, (1,4,1), max_h=1, max_p=1), RASCIAnsatz(6,3,3,(1,4,1), max_h=1, max_p=1)] #Single excitation RASCI calculation
-#ansatze = [RASCIAnsatz(6, 3, 3, (1,4,1), max_h=0, max_p=0), RASCIAnsatz(6,3,3,(1,4,1), max_h=0, max_p=0)] #CAS type RASCI calculation
+ansatze = [RASCIAnsatz(6, 3, 3, (1,4,1), max_h=0, max_p=0), RASCIAnsatz(6,3,3,(1,4,1), max_h=0, max_p=0)] #CAS type RASCI calculation
 for i in ansatze
     display(i)
 end
@@ -72,7 +72,7 @@ end
 
 rdm1 = zeros(size(ints.h1))
 #run cmf_oo
-e_cmf, U_cmf, d1  = ClusterMeanField.cmf_oo_diis(ints, clusters, init_fspace, ansatze, RDM1(rdm1, rdm1), maxiter_oo = 100, zero_intra_rots=true, orb_hessian=true, tol_oo=1e-6, tol_ci=1e-8, verbose=0, diis_start=1);
+e_cmf, U_cmf, d1  = ClusterMeanField.cmf_oo_newton(ints, clusters, init_fspace, ansatze, RDM1(n_orb(ints)), maxiter_oo = 100, zero_intra_rots=true, tol_oo=1e-6, tol_ci=1e-8, verbose=0, diis_start=1);
 ints_cmf = orbital_rotation(ints,U_cmf)
 C_cmf = Cact*U_cmf
 pyscf.tools.molden.from_mo(pymol, "examples/two_benzene/C_cmf.molden", C_cmf)

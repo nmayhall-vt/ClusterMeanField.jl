@@ -667,3 +667,138 @@ end
 
 
 
+
+"""
+    orbital_hessian_finite_difference(ints, clusters, kappa, fspace, d; 
+                                    ci_conv = 1e-8, 
+                                    verbose = 1,
+                                    stepsize = 1e-6)
+Compute orbital hessian with finite difference for cMF using orbital energy
+"""
+function orbital_hessian_finite_difference(ints, clusters, kappa, fspace, ansatze,d::RDM1; ci_conv = 1e-8, verbose = 0,stepsize = 1e-5)
+    n = length(kappa)
+    # error("here")
+    hessian = zeros(n, n)
+    for i in 1:n
+        kappa_plus=deepcopy(kappa)
+        kappa_plus[i]+=stepsize
+
+        kappa_minus=deepcopy(kappa)
+        kappa_minus[i]-=stepsize
+        #hessian[i,i]=(orbital_objective_function(ints, clusters, kappa_plus, fspace, d, ci_conv = ci_conv, verbose = verbose)-2*orbital_objective_function(ints, clusters, kappa, fspace, d, ci_conv = ci_conv, verbose = verbose)+orbital_objective_function(ints, clusters, kappa_minus, fspace, d, ci_conv = ci_conv, verbose = verbose))/(stepsize^2)
+        kappa_2plus=deepcopy(kappa)
+        kappa_2plus[i] +=(2*stepsize)
+        kappa_2minus=deepcopy(kappa)
+        kappa_2minus[i]-=(2*stepsize)
+
+
+        k0 = deepcopy(kappa)
+        e0 = orbital_objective_function(ints, clusters, k0, fspace,ansatze, d, ci_conv=ci_conv, verbose=verbose) 
+
+        k1 = deepcopy(kappa)
+        k1[i] += stepsize
+        e1 = orbital_objective_function(ints, clusters, k1, fspace, ansatze,d, ci_conv=ci_conv, verbose=verbose) 
+        
+        k2 = deepcopy(kappa)
+        k2[i] -= stepsize
+        e2 = orbital_objective_function(ints, clusters, k2, fspace, ansatze,d, ci_conv=ci_conv, verbose=verbose) 
+        
+        grad = (e1-e2)/(2*stepsize)
+        hessian[i,i] = (e1 - 2*e0 + e2) / (stepsize^2)
+
+        # @printf(" e0: %12.8f e1: %12.8f e2: %12.8f grad: %12.8f\n", e0, e1, e2, grad)
+        
+        for j in (i+1):n
+            # Perturb parameters in both directions
+            kappa_plus_plus = deepcopy(kappa)
+            kappa_plus_plus[i] += stepsize
+            kappa_plus_plus[j] += stepsize
+
+            kappa_plus_minus = deepcopy(kappa)
+            kappa_plus_minus[i] += stepsize
+            kappa_plus_minus[j] -= stepsize
+
+            kappa_minus_plus = deepcopy(kappa)
+            kappa_minus_plus[i] -= stepsize
+            kappa_minus_plus[j] += stepsize
+
+            kappa_minus_minus = deepcopy(kappa)
+            kappa_minus_minus[i] -= stepsize
+            kappa_minus_minus[j] -= stepsize
+
+            # Calculate finite difference approximation   
+            hessian[i, j] = (orbital_objective_function(ints, clusters, kappa_plus_plus, fspace, ansatze,d, ci_conv = ci_conv, verbose = verbose) -
+                            orbital_objective_function(ints, clusters, kappa_plus_minus, fspace, ansatze,d, ci_conv = ci_conv, verbose = verbose) -
+                            orbital_objective_function(ints, clusters, kappa_minus_plus, fspace, ansatze,d, ci_conv = ci_conv, verbose = verbose) +
+                            orbital_objective_function(ints, clusters, kappa_minus_minus, fspace, ansatze,d, ci_conv = ci_conv, verbose = verbose))/(4*(stepsize^2))
+            # Fill in the symmetric entry
+            hessian[j, i] = hessian[i, j]
+        end
+    end
+
+    return hessian
+end
+
+
+"""
+    orbital_hessian_numerical(ints, clusters, kappa, fspace, d; 
+                                    ci_conv = 1e-8, 
+                                    verbose = 1,
+                                    stepsize = 1e-6)
+Compute orbital hessian with finite difference for cMF using orbital gradient 
+"""
+function orbital_hessian_numerical(ints, clusters, kappa, fspace, ansatze,d::RDM1; verbose = 0,step_size = 5e-5,zero_intra_rots = true,maxiter_ci = 100, maxiter_d1 = 100, tol_d1 = 1e-6, tol_ci = 1e-8,sequential = false)
+    n = length(kappa)
+    #error("here.....")
+    hessian = zeros(n, n)
+    function step_numerical!(ints, d1, k)
+        norb = n_orb(ints)
+        K = unpack_gradient(k, norb)
+        # if zero_intra_rots
+        #     # Remove intracluster rotations
+        #     for ci in clusters
+        #         K[ci.orb_list, ci.orb_list] .= 0
+        #     end
+        # end
+       
+        Ui = exp(K)
+        
+        tmp_ints = orbital_rotation(ints,Ui)
+
+        e, rdm1_dict, rdm2_dict = cmf_ci(tmp_ints, clusters, fspace,ansatze, d1, 
+                                         maxiter_d1 = maxiter_d1, 
+                                         maxiter_ci = maxiter_ci, 
+                                         tol_d1     = tol_d1, 
+                                         tol_ci     = tol_ci, 
+                                         verbose    = 0, 
+                                         sequential = sequential)
+        
+        gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
+        G = build_orbital_gradient(tmp_ints, gd1, gd2)
+        # G=orbital_gradient_numerical(ints,clusters,k,fspace,gd1)
+        return  G
+    end
+    
+    norb = n_orb(ints)
+    #central difference 
+    for i in 1:n
+        println(i)
+        x_plus_i = deepcopy(kappa)
+        x_minus_i = deepcopy(kappa)
+        x_plus_i[i] += step_size
+        x_minus_i[i] -= step_size
+        g_plus_i=step_numerical!(ints,d,x_plus_i)
+        g_minus_i=step_numerical!(ints,d,x_minus_i)
+        
+        gnum = (g_plus_i .- g_minus_i)./(2*step_size)
+        # display(gnum)
+        for j in 1:n
+            hessian[i,j] = gnum[j]
+            #error("dfdg")
+        end
+
+        
+    end
+    # display(hessian)
+    return hessian
+end

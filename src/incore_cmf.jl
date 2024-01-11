@@ -1,6 +1,6 @@
 using ClusterMeanField
 using ActiveSpaceSolvers
-
+using LinearSolve
 
 
 
@@ -140,7 +140,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
                 d2 = RDM2(d2aa, d2ab, d2bb)
             else
                 solver = SolverSettings(verbose=1, tol=tol_ci, maxiter=maxiter_ci)
-                solution = solve(ints_i, ansatz, solver)
+                solution = ActiveSpaceSolvers.solve(ints_i, ansatz, solver)
                 d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
 
                 verbose < 2 || display(solution)
@@ -276,7 +276,7 @@ function cmf_ci_iteration(ints::InCoreInts{T}, clusters::Vector{MOCluster}, in_r
             else
           
                 solver = SolverSettings(verbose=1, tol=tol_ci, maxiter=maxiter_ci)
-                solution = solve(ints_i, ansatz, solver)
+                solution = ActiveSpaceSolvers.solve(ints_i, ansatz, solver)
                 d1a, d1b, d2aa, d2bb, d2ab = compute_1rdm_2rdm(solution)
 
                 verbose < 2 || display(solution)
@@ -1647,6 +1647,7 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
                     zero_intra_rots =true,
                     sequential      = false,
                     trust_region=false,
+                    use_linearsolve=true
                     
     ) where T
     #={{{=#
@@ -1681,7 +1682,8 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
                                          tol_ci     = tol_ci, 
                                          verbose    = verbose, 
                                          use_pyscf=use_pyscf,
-                                         sequential = sequential)
+                                         sequential = sequential
+                                         )
         
         gd1, gd2 = assemble_full_rdm(clusters, rdm1_dict, rdm2_dict)
         g_i = build_orbital_gradient(ints, gd1, gd2)
@@ -1710,10 +1712,25 @@ function cmf_oo_newton( ints_in::InCoreInts{T}, clusters::Vector{MOCluster}, fsp
         g_i=g
         if zero_intra_rots
          #project out invariant orbital rotations
-            tmp_step = (pinv(proj_vec'*h_i*proj_vec))*(proj_vec'*g_i)
+            if use_linearsolve
+                prob_h=LinearSolve.LinearProblem(proj_vec'*h_i*proj_vec,proj_vec'*g_i)
+                sol_h=LinearSolve.solve(prob_h)
+                # sol_h=LinearSolve.solve(prob_h,KrylovJL_GMRES())
+                tmp_step=sol_h.u
+            else
+                tmp_step = (pinv(proj_vec'*h_i*proj_vec))*(proj_vec'*g_i)
+            end
             step_i = -proj_vec*tmp_step
         else
-            step_i=-(pinv(h_i)*(g_i))#;atol=1e-8  
+            
+            if use_linearsolve
+                prob_h=LinearSolve.LinearProblem(h_i,g_i)
+                sol_h=LinearSolve.solve(prob_h)
+                # sol_h=LinearSolve.solve(prob_h,KrylovJL_GMRES())
+                step_i=-sol_h.u
+            else
+                step_i=-(pinv(h_i)*(g_i))#;atol=1e-8  
+            end
         end
         if trust_region==true
             if norm(step_i)> step_trust_region
